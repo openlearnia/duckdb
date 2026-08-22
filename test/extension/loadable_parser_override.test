@@ -20,11 +20,23 @@ unrecognized value "doesnotexist" for enum "AllowParserOverride"
 statement ok
 set allow_parser_override_extension=default;
 
-# Default behavior is not using the parser override
-statement error
+# An extension can explicitly opt its override into default parser policy.
+query I
 override
 ----
-Parser Error: syntax error at or near "override"
+The DuckDB parser has been overridden
+
+# Owned syntax errors are preserved under default policy.
+statement error
+overri
+----
+Parser Error: Parser overridden, query equaled "overri" but not "override"
+
+# Unrelated SQL still falls through to the native parser.
+query I
+SELECT 1;
+----
+1
 
 # Fallback behavior is trying the parser override and if they error falling back to the default parser
 statement ok

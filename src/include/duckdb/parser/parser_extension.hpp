@@ -114,6 +114,9 @@ public:
 
 	//! Override the current parser with a new parser and return a vector of SQL statements
 	parser_override_function_t parser_override = nullptr;
+	//! Invoke this override under the default parser policy. Intended for narrowly scoped
+	//! grammar extensions that decline every statement they do not own.
+	bool parser_override_default = false;
 
 	//! Additional parser info passed to the parse function
 	shared_ptr<ParserExtensionInfo> parser_info;

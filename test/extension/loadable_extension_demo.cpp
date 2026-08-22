@@ -201,6 +201,7 @@ public:
 		parse_function = QuackParseFunction;
 		plan_function = QuackPlanFunction;
 		parser_override = QuackParser;
+		parser_override_default = true;
 	}
 
 	static ParserExtensionParseResult QuackParseFunction(ParserExtensionInfo *info, const string &query) {
