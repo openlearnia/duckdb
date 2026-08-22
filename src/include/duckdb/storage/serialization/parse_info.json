@@ -597,6 +597,11 @@
         "id": 207,
         "name": "extra_drop_info",
         "type": "unique_ptr<ExtraDropInfo>"
+      },
+      {
+        "id": 208,
+        "name": "materialized_view",
+        "type": "bool"
       }
     ]
   },

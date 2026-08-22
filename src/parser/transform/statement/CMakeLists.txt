@@ -27,6 +27,7 @@ add_library_unity(
   transform_merge_into.cpp
   transform_pragma.cpp
   transform_rename.cpp
+  transform_refresh_materialized_view.cpp
   transform_secret.cpp
   transform_select.cpp
   transform_select_node.cpp

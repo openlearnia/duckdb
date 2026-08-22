@@ -9,6 +9,7 @@ DropInfo::DropInfo() : ParseInfo(TYPE), catalog(INVALID_CATALOG), schema(INVALID
 DropInfo::DropInfo(const DropInfo &info)
     : ParseInfo(info.info_type), type(info.type), catalog(info.catalog), schema(info.schema), name(info.name),
       if_not_found(info.if_not_found), cascade(info.cascade), allow_drop_internal(info.allow_drop_internal),
+      materialized_view(info.materialized_view),
       extra_drop_info(info.extra_drop_info ? info.extra_drop_info->Copy() : nullptr) {
 }
 
@@ -23,7 +24,7 @@ string DropInfo::ToString() const {
 		result += KeywordHelper::WriteOptionallyQuoted(name);
 	} else {
 		result += "DROP";
-		result += " " + ParseInfo::TypeToString(type);
+		result += materialized_view ? " MATERIALIZED VIEW" : " " + ParseInfo::TypeToString(type);
 		if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 			result += " IF EXISTS";
 		}

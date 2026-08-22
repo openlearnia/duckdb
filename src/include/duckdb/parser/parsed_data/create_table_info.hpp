@@ -39,6 +39,9 @@ struct CreateTableInfo : public CreateInfo {
 	bool materialized_view = false;
 	//! Canonical defining SELECT for a native materialized view
 	string materialized_view_query;
+	//! Transient flags used to bind REFRESH MATERIALIZED VIEW through the CTAS path
+	bool materialized_view_refresh = false;
+	bool materialized_view_if_stale = false;
 
 public:
 	DUCKDB_API unique_ptr<CreateInfo> Copy() const override;

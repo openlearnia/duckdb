@@ -1992,6 +1992,12 @@ typedef struct PGCreateTableAsStmt {
 	PGOnCreateConflict onconflict;        /* what to do on create conflict */
 } PGCreateTableAsStmt;
 
+typedef struct PGRefreshMatViewStmt {
+	PGNodeTag type;
+	PGRangeVar *relation;
+	bool if_stale;
+} PGRefreshMatViewStmt;
+
 /* ----------------------
  * Checkpoint Statement
  * ----------------------

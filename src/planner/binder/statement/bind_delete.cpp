@@ -23,6 +23,9 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 		throw BinderException("Can only delete from base table");
 	}
 	auto &table = *table_ptr;
+	if (table.IsMaterializedView()) {
+		throw BinderException("Cannot delete from materialized view \"%s\"; use REFRESH MATERIALIZED VIEW", table.name);
+	}
 	if (!table.temporary) {
 		// delete from persistent table: not read only!
 		auto &properties = GetStatementProperties();

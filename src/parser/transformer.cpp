@@ -183,6 +183,8 @@ unique_ptr<SQLStatement> Transformer::TransformStatementInternal(duckdb_libpgque
 		return TransformDeallocate(PGCast<duckdb_libpgquery::PGDeallocateStmt>(stmt));
 	case duckdb_libpgquery::T_PGCreateTableAsStmt:
 		return TransformCreateTableAs(PGCast<duckdb_libpgquery::PGCreateTableAsStmt>(stmt));
+	case duckdb_libpgquery::T_PGRefreshMatViewStmt:
+		return TransformRefreshMaterializedView(PGCast<duckdb_libpgquery::PGRefreshMatViewStmt>(stmt));
 	case duckdb_libpgquery::T_PGPragmaStmt:
 		return TransformPragma(PGCast<duckdb_libpgquery::PGPragmaStmt>(stmt));
 	case duckdb_libpgquery::T_PGExportStmt:

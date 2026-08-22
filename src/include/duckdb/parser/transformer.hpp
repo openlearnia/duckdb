@@ -122,6 +122,7 @@ private:
 	unique_ptr<CreateStatement> TransformCreateTable(duckdb_libpgquery::PGCreateStmt &node);
 	//! Transform a Postgres duckdb_libpgquery::T_PGCreateStmt node into a CreateStatement
 	unique_ptr<CreateStatement> TransformCreateTableAs(duckdb_libpgquery::PGCreateTableAsStmt &stmt);
+	unique_ptr<CreateStatement> TransformRefreshMaterializedView(duckdb_libpgquery::PGRefreshMatViewStmt &stmt);
 	//! Transform a Postgres node into a CreateStatement
 	unique_ptr<CreateStatement> TransformCreateSchema(duckdb_libpgquery::PGCreateSchemaStmt &stmt);
 	//! Transform a Postgres duckdb_libpgquery::T_PGCreateSeqStmt node into a CreateStatement

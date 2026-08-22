@@ -536,6 +536,9 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 
 	BindSchemaOrCatalog(stmt.catalog, stmt.schema);
 	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, stmt.catalog, stmt.schema, stmt.table);
+	if (table.IsMaterializedView()) {
+		throw BinderException("Cannot insert into materialized view \"%s\"; use REFRESH MATERIALIZED VIEW", table.name);
+	}
 	if (stmt.on_conflict_info) {
 		// generate a MERGE INTO statement and bind it instead
 		auto merge_into = GenerateMergeInto(stmt, table);

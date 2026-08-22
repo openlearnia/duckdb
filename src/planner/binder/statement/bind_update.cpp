@@ -130,6 +130,9 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 		throw BinderException("Can only update base table");
 	}
 	auto &table = *table_ptr;
+	if (table.IsMaterializedView()) {
+		throw BinderException("Cannot update materialized view \"%s\"; use REFRESH MATERIALIZED VIEW", table.name);
+	}
 
 	optional_ptr<LogicalGet> get;
 	if (stmt.from_table) {
