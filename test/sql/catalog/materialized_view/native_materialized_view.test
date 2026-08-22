@@ -268,6 +268,64 @@ SELECT count(*) FROM mv_projection
 ----
 4
 
+# A single append-only fact side of an inner join can be delta-maintained.
+statement ok
+CREATE TABLE join_fact(id INTEGER, dim_id INTEGER, amount INTEGER)
+
+statement ok
+CREATE TABLE join_dim(dim_id INTEGER, category VARCHAR)
+
+statement ok
+INSERT INTO join_fact VALUES (1, 1, 10), (2, 2, 5)
+
+statement ok
+INSERT INTO join_dim VALUES (1, 'a'), (2, 'b')
+
+statement ok
+CREATE MATERIALIZED VIEW mv_join AS
+SELECT d.category, count(*) AS rows, sum(f.amount) AS total
+FROM join_fact f JOIN join_dim d ON f.dim_id = d.dim_id
+GROUP BY d.category
+
+statement ok
+INSERT INTO join_fact VALUES (3, 1, 7), (4, 2, 3)
+
+statement ok
+REFRESH MATERIALIZED VIEW IF STALE mv_join
+
+query TII rowsort
+SELECT * FROM mv_join
+----
+a	2	17
+b	2	8
+
+query T
+SELECT last_refresh_mode FROM duckdb_materialized_views() WHERE view_name = 'mv_join'
+----
+join_delta
+
+# Changes on both join sides are exact full-refresh fallbacks.
+statement ok
+INSERT INTO join_fact VALUES (5, 3, 4)
+
+statement ok
+INSERT INTO join_dim VALUES (3, 'c')
+
+statement ok
+REFRESH MATERIALIZED VIEW IF STALE mv_join
+
+query T
+SELECT last_refresh_mode FROM duckdb_materialized_views() WHERE view_name = 'mv_join'
+----
+full
+
+query TII rowsort
+SELECT * FROM mv_join
+----
+a	2	17
+b	2	8
+c	1	4
+
 # Supported grouped aggregates merge an exact delta, including nulls and new groups.
 statement ok
 CREATE TABLE base_aggregate(grp INTEGER, val INTEGER)
@@ -365,6 +423,9 @@ DROP MATERIALIZED VIEW mv_aggregate
 
 statement ok
 DROP MATERIALIZED VIEW mv_projection
+
+statement ok
+DROP MATERIALIZED VIEW mv_join
 
 statement ok
 DROP MATERIALIZED VIEW mv

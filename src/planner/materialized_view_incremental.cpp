@@ -8,6 +8,7 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/parser/tableref/joinref.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/local_storage.hpp"
@@ -32,8 +33,8 @@ static string ExpressionSQL(const ParsedExpression &expression) {
 	return copy->ToString();
 }
 
-static bool IsAppendOnlySinceRefresh(ClientContext &context, TableCatalogEntry &view, TableCatalogEntry *&dependency,
-                                     idx_t &row_watermark) {
+static bool FindSingleAppendedDependency(ClientContext &context, TableCatalogEntry &view,
+                                         TableCatalogEntry *&dependency, idx_t &row_watermark) {
 	auto &catalogs = view.GetMaterializedViewDependencyCatalogs();
 	auto &schemas = view.GetMaterializedViewDependencySchemas();
 	auto &tables = view.GetMaterializedViewDependencyTables();
@@ -41,44 +42,85 @@ static bool IsAppendOnlySinceRefresh(ClientContext &context, TableCatalogEntry &
 	auto &delete_generations = view.GetMaterializedViewDependencyDeleteGenerations();
 	auto &update_generations = view.GetMaterializedViewDependencyUpdateGenerations();
 	auto &row_counts = view.GetMaterializedViewDependencyRowCounts();
-	if (catalogs.size() != 1 || schemas.size() != 1 || tables.size() != 1 || append_generations.size() != 1 ||
-	    delete_generations.size() != 1 || update_generations.size() != 1 || row_counts.size() != 1) {
+	auto dependency_count = catalogs.size();
+	if (dependency_count == 0 || schemas.size() != dependency_count || tables.size() != dependency_count ||
+	    append_generations.size() != dependency_count || delete_generations.size() != dependency_count ||
+	    update_generations.size() != dependency_count || row_counts.size() != dependency_count) {
 		return false;
 	}
-	EntryLookupInfo lookup(CatalogType::TABLE_ENTRY, tables[0]);
-	auto entry = Catalog::GetEntry(context, catalogs[0], schemas[0], lookup, OnEntryNotFound::RETURN_NULL);
-	if (!entry || entry->type != CatalogType::TABLE_ENTRY || !entry->Cast<TableCatalogEntry>().IsDuckTable()) {
+	for (idx_t dependency_idx = 0; dependency_idx < dependency_count; dependency_idx++) {
+		EntryLookupInfo lookup(CatalogType::TABLE_ENTRY, tables[dependency_idx]);
+		auto entry = Catalog::GetEntry(context, catalogs[dependency_idx], schemas[dependency_idx], lookup,
+		                               OnEntryNotFound::RETURN_NULL);
+		if (!entry || entry->type != CatalogType::TABLE_ENTRY || !entry->Cast<TableCatalogEntry>().IsDuckTable()) {
+			return false;
+		}
+		auto &candidate = entry->Cast<TableCatalogEntry>();
+		auto &storage = candidate.GetStorage();
+		auto append_generation = storage.GetAppendGeneration();
+		auto delete_generation = storage.GetDeleteGeneration();
+		auto update_generation = storage.GetUpdateGeneration();
+		auto &transaction = DuckTransaction::Get(context, candidate.ParentCatalog());
+		auto modification_type = transaction.GetTableModificationType(storage);
+		if (modification_type & static_cast<uint8_t>(TableModificationType::APPEND)) {
+			append_generation++;
+		}
+		if (modification_type & static_cast<uint8_t>(TableModificationType::DELETE)) {
+			delete_generation++;
+		}
+		if (modification_type & static_cast<uint8_t>(TableModificationType::UPDATE)) {
+			update_generation++;
+		}
+		if (delete_generation != delete_generations[dependency_idx] ||
+		    update_generation != update_generations[dependency_idx] ||
+		    append_generation < append_generations[dependency_idx]) {
+			return false;
+		}
+		if (append_generation == append_generations[dependency_idx]) {
+			continue;
+		}
+		if (dependency) {
+			return false;
+		}
+		auto local_appends = transaction.GetLocalStorage().AddedRows(storage);
+		auto current_appended_rows = storage.GetAppendedRows() + local_appends;
+		auto current_physical_rows = storage.GetTotalRows() + local_appends;
+		if (current_appended_rows <= row_counts[dependency_idx]) {
+			return false;
+		}
+		auto newly_appended_rows = current_appended_rows - row_counts[dependency_idx];
+		if (newly_appended_rows > current_physical_rows) {
+			return false;
+		}
+		dependency = &candidate;
+		row_watermark = current_physical_rows - newly_appended_rows;
+	}
+	return dependency != nullptr;
+}
+
+static bool FindIncrementalBase(TableRef &ref, TableCatalogEntry &dependency, BaseTableRef *&incremental_base,
+                                idx_t &match_count) {
+	if (ref.type == TableReferenceType::BASE_TABLE) {
+		auto &base = ref.Cast<BaseTableRef>();
+		auto base_schema = base.schema_name.empty() ? DEFAULT_SCHEMA : base.schema_name;
+		auto base_catalog = base.catalog_name.empty() ? dependency.ParentCatalog().GetName() : base.catalog_name;
+		if (StringUtil::CIEquals(base_catalog, dependency.ParentCatalog().GetName()) &&
+		    StringUtil::CIEquals(base_schema, dependency.schema.name) &&
+		    StringUtil::CIEquals(base.table_name, dependency.name)) {
+			incremental_base = &base;
+			match_count++;
+		}
+		return true;
+	}
+	if (ref.type != TableReferenceType::JOIN) {
 		return false;
 	}
-	dependency = &entry->Cast<TableCatalogEntry>();
-	auto &storage = dependency->GetStorage();
-	auto append_generation = storage.GetAppendGeneration();
-	auto delete_generation = storage.GetDeleteGeneration();
-	auto update_generation = storage.GetUpdateGeneration();
-	auto &transaction = DuckTransaction::Get(context, dependency->ParentCatalog());
-	auto modification_type = transaction.GetTableModificationType(storage);
-	if (modification_type & static_cast<uint8_t>(TableModificationType::APPEND)) {
-		append_generation++;
-	}
-	if (modification_type & static_cast<uint8_t>(TableModificationType::DELETE)) {
-		delete_generation++;
-	}
-	if (modification_type & static_cast<uint8_t>(TableModificationType::UPDATE)) {
-		update_generation++;
-	}
-	auto local_appends = transaction.GetLocalStorage().AddedRows(storage);
-	auto current_appended_rows = storage.GetAppendedRows() + local_appends;
-	auto current_physical_rows = storage.GetTotalRows() + local_appends;
-	if (append_generation <= append_generations[0] || delete_generation != delete_generations[0] ||
-	    update_generation != update_generations[0] || current_appended_rows <= row_counts[0]) {
+	auto &join = ref.Cast<JoinRef>();
+	if (join.type != JoinType::INNER || join.ref_type != JoinRefType::REGULAR) {
 		return false;
 	}
-	auto newly_appended_rows = current_appended_rows - row_counts[0];
-	if (newly_appended_rows > current_physical_rows) {
-		return false;
-	}
-	row_watermark = current_physical_rows - newly_appended_rows;
-	return true;
+	return FindIncrementalBase(*join.left, dependency, incremental_base, match_count) &&
+	       FindIncrementalBase(*join.right, dependency, incremental_base, match_count);
 }
 
 static bool AnalyzeAggregate(const ParsedExpression &expression, idx_t select_index, NativeMVAggregateInfo &result) {
@@ -139,33 +181,33 @@ bool TryBuildMaterializedViewIncrementalQuery(ClientContext &context, TableCatal
                                               unique_ptr<SelectStatement> &query, string &refresh_mode) {
 	TableCatalogEntry *dependency = nullptr;
 	idx_t row_watermark;
-	if (!IsAppendOnlySinceRefresh(context, view, dependency, row_watermark)) {
+	if (!FindSingleAppendedDependency(context, view, dependency, row_watermark)) {
 		return false;
 	}
 	if (query->node->type != QueryNodeType::SELECT_NODE || !query->node->cte_map.map.empty()) {
 		return false;
 	}
 	auto &node = query->node->Cast<SelectNode>();
-	if (!node.from_table || node.from_table->type != TableReferenceType::BASE_TABLE || node.having || node.qualify ||
-	    node.sample || !node.modifiers.empty() || (node.where_clause && node.where_clause->HasSubquery())) {
+	if (!node.from_table || node.having || node.qualify || node.sample || !node.modifiers.empty() ||
+	    (node.where_clause && node.where_clause->HasSubquery())) {
 		return false;
 	}
-	auto &base = node.from_table->Cast<BaseTableRef>();
-	auto base_schema = base.schema_name.empty() ? DEFAULT_SCHEMA : base.schema_name;
-	auto base_catalog = base.catalog_name.empty() ? dependency->ParentCatalog().GetName() : base.catalog_name;
-	if (!StringUtil::CIEquals(base_catalog, dependency->ParentCatalog().GetName()) ||
-	    !StringUtil::CIEquals(base_schema, dependency->schema.name) ||
-	    !StringUtil::CIEquals(base.table_name, dependency->name)) {
+	BaseTableRef *incremental_base = nullptr;
+	idx_t incremental_base_matches = 0;
+	if (!FindIncrementalBase(*node.from_table, *dependency, incremental_base, incremental_base_matches) ||
+	    incremental_base_matches != 1) {
 		return false;
 	}
 
-	string appended_filter = StringUtil::Format("rowid >= %llu", row_watermark);
+	auto rowid_qualifier = incremental_base->alias.empty() ? incremental_base->table_name : incremental_base->alias;
+	string appended_filter = StringUtil::Format("%s.rowid >= %llu", MVIdentifier(rowid_qualifier), row_watermark);
 	if (node.where_clause) {
 		appended_filter = "(" + node.where_clause->ToString() + ") AND " + appended_filter;
 	}
-	string view_sql = MVIdentifier(view.catalog.GetName()) + "." + MVIdentifier(view.schema.name) + "." +
-	                  MVIdentifier(view.name);
-	string from_sql = base.ToString();
+	string view_sql =
+	    MVIdentifier(view.catalog.GetName()) + "." + MVIdentifier(view.schema.name) + "." + MVIdentifier(view.name);
+	string from_sql = node.from_table->ToString();
+	auto join_incremental = node.from_table->type == TableReferenceType::JOIN;
 	auto &groups = node.groups.group_expressions;
 
 	vector<NativeMVAggregateInfo> aggregates;
@@ -205,7 +247,7 @@ bool TryBuildMaterializedViewIncrementalQuery(ClientContext &context, TableCatal
 		auto sql = StringUtil::Format("SELECT * FROM %s UNION ALL SELECT %s FROM %s WHERE %s", view_sql, select_sql,
 		                              from_sql, appended_filter);
 		query = ParseIncrementalQuery(sql);
-		refresh_mode = "append";
+		refresh_mode = join_incremental ? "join_append" : "append";
 		return true;
 	}
 
@@ -239,7 +281,7 @@ bool TryBuildMaterializedViewIncrementalQuery(ClientContext &context, TableCatal
 		if (key_it != key_positions.end()) {
 			auto key_idx = NumericCast<idx_t>(key_it - key_positions.begin());
 			result_select += StringUtil::Format("COALESCE(m.%s, d.__k%llu) AS %s", MVIdentifier(column_name), key_idx,
-			                                        MVIdentifier(column_name));
+			                                    MVIdentifier(column_name));
 			continue;
 		}
 		auto aggregate_it = std::find_if(aggregates.begin(), aggregates.end(), [&](const NativeMVAggregateInfo &entry) {
@@ -261,14 +303,15 @@ bool TryBuildMaterializedViewIncrementalQuery(ClientContext &context, TableCatal
 				join_condition += " AND ";
 			}
 			auto &column_name = view.GetColumns().GetColumn(LogicalIndex(key_positions[key_idx])).Name();
-			join_condition += StringUtil::Format("m.%s IS NOT DISTINCT FROM d.__k%llu", MVIdentifier(column_name), key_idx);
+			join_condition +=
+			    StringUtil::Format("m.%s IS NOT DISTINCT FROM d.__k%llu", MVIdentifier(column_name), key_idx);
 		}
 		merge_from = view_sql + " m FULL OUTER JOIN __delta d ON " + join_condition;
 	}
 	auto sql = StringUtil::Format("WITH __delta AS (SELECT %s FROM %s WHERE %s%s) SELECT %s FROM %s", delta_select,
 	                              from_sql, appended_filter, group_by, result_select, merge_from);
 	query = ParseIncrementalQuery(sql);
-	refresh_mode = "delta";
+	refresh_mode = join_incremental ? "join_delta" : "delta";
 	return true;
 }
 
