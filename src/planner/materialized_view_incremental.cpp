@@ -15,12 +15,13 @@
 
 namespace duckdb {
 
-enum class NativeMVAggregate : uint8_t { SUM, COUNT, MIN, MAX };
+enum class NativeMVAggregate : uint8_t { SUM, COUNT, MIN, MAX, AVG };
 
 struct NativeMVAggregateInfo {
 	NativeMVAggregate kind;
 	idx_t select_index;
 	string delta_sql;
+	string input_sql;
 };
 
 static string MVIdentifier(const string &input) {
@@ -140,15 +141,31 @@ static bool AnalyzeAggregate(const ParsedExpression &expression, idx_t select_in
 		result.kind = NativeMVAggregate::MIN;
 	} else if (name == "max") {
 		result.kind = NativeMVAggregate::MAX;
+	} else if (name == "avg") {
+		result.kind = NativeMVAggregate::AVG;
 	} else {
 		return false;
 	}
 	result.select_index = select_index;
 	result.delta_sql = ExpressionSQL(expression);
+	if (function.children.size() == 1) {
+		result.input_sql = ExpressionSQL(*function.children[0]);
+	}
 	return true;
 }
 
-static string MergeAggregateSQL(const NativeMVAggregateInfo &aggregate, const string &column_name) {
+static optional_idx FindAggregateState(const vector<NativeMVAggregateInfo> &aggregates, NativeMVAggregate kind,
+                                       const string &input_sql) {
+	for (idx_t aggregate_idx = 0; aggregate_idx < aggregates.size(); aggregate_idx++) {
+		if (aggregates[aggregate_idx].kind == kind && aggregates[aggregate_idx].input_sql == input_sql) {
+			return aggregate_idx;
+		}
+	}
+	return optional_idx();
+}
+
+static string MergeAggregateSQL(const NativeMVAggregateInfo &aggregate, const string &column_name,
+                                const vector<NativeMVAggregateInfo> &aggregates, TableCatalogEntry &view) {
 	auto current = "m." + MVIdentifier(column_name);
 	auto delta = "d.__d" + to_string(aggregate.select_index);
 	switch (aggregate.kind) {
@@ -163,6 +180,20 @@ static string MergeAggregateSQL(const NativeMVAggregateInfo &aggregate, const st
 	case NativeMVAggregate::MAX:
 		return StringUtil::Format("CASE WHEN %s IS NULL THEN %s WHEN %s IS NULL THEN %s ELSE GREATEST(%s, %s) END",
 		                          current, delta, delta, current, current, delta);
+	case NativeMVAggregate::AVG: {
+		auto sum_idx = FindAggregateState(aggregates, NativeMVAggregate::SUM, aggregate.input_sql);
+		auto count_idx = FindAggregateState(aggregates, NativeMVAggregate::COUNT, aggregate.input_sql);
+		if (!sum_idx.IsValid() || !count_idx.IsValid()) {
+			throw InternalException("AVG materialized-view delta is missing SUM/COUNT state");
+		}
+		auto &sum_aggregate = aggregates[sum_idx.GetIndex()];
+		auto &count_aggregate = aggregates[count_idx.GetIndex()];
+		auto &sum_column = view.GetColumns().GetColumn(LogicalIndex(sum_aggregate.select_index)).Name();
+		auto &count_column = view.GetColumns().GetColumn(LogicalIndex(count_aggregate.select_index)).Name();
+		auto merged_sum = MergeAggregateSQL(sum_aggregate, sum_column, aggregates, view);
+		auto merged_count = MergeAggregateSQL(count_aggregate, count_column, aggregates, view);
+		return StringUtil::Format("(%s) / NULLIF((%s), 0)", merged_sum, merged_count);
+	}
 	default:
 		throw InternalException("Unsupported native materialized-view aggregate");
 	}
@@ -250,6 +281,15 @@ bool TryBuildMaterializedViewIncrementalQuery(ClientContext &context, TableCatal
 		refresh_mode = join_incremental ? "join_append" : "append";
 		return true;
 	}
+	for (auto &aggregate : aggregates) {
+		if (aggregate.kind != NativeMVAggregate::AVG) {
+			continue;
+		}
+		if (!FindAggregateState(aggregates, NativeMVAggregate::SUM, aggregate.input_sql).IsValid() ||
+		    !FindAggregateState(aggregates, NativeMVAggregate::COUNT, aggregate.input_sql).IsValid()) {
+			return false;
+		}
+	}
 
 	if (key_positions.size() != groups.size() || node.select_list.size() != key_positions.size() + aggregates.size()) {
 		return false;
@@ -290,7 +330,8 @@ bool TryBuildMaterializedViewIncrementalQuery(ClientContext &context, TableCatal
 		if (aggregate_it == aggregates.end()) {
 			return false;
 		}
-		result_select += MergeAggregateSQL(*aggregate_it, column_name) + " AS " + MVIdentifier(column_name);
+		result_select +=
+		    MergeAggregateSQL(*aggregate_it, column_name, aggregates, view) + " AS " + MVIdentifier(column_name);
 	}
 
 	string merge_from;
