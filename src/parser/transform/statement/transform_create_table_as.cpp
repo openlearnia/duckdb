@@ -9,9 +9,7 @@
 namespace duckdb {
 
 unique_ptr<CreateStatement> Transformer::TransformCreateTableAs(duckdb_libpgquery::PGCreateTableAsStmt &stmt) {
-	if (stmt.relkind == duckdb_libpgquery::PG_OBJECT_MATVIEW) {
-		throw NotImplementedException("Materialized view not implemented");
-	}
+	const bool materialized_view = stmt.relkind == duckdb_libpgquery::PG_OBJECT_MATVIEW;
 	if (stmt.is_select_into) {
 		throw NotImplementedException("Unimplemented features for CREATE TABLE as");
 	}
@@ -26,6 +24,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTableAs(duckdb_libpgquer
 		throw ParserException("Empty table name not supported");
 	}
 	auto query = TransformSelectStmt(*stmt.query, false);
+	const auto materialized_view_query = materialized_view ? query->ToString() : string();
 
 	vector<unique_ptr<ParsedExpression>> partition_keys;
 	if (stmt.into->partition_list) {
@@ -71,6 +70,8 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTableAs(duckdb_libpgquer
 	info->temporary =
 	    stmt.into->rel->relpersistence == duckdb_libpgquery::PGPostgresRelPersistence::PG_RELPERSISTENCE_TEMP;
 	info->query = std::move(query);
+	info->materialized_view = materialized_view;
+	info->materialized_view_query = materialized_view_query;
 	result->info = std::move(info);
 	return result;
 }

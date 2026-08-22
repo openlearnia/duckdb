@@ -170,6 +170,16 @@
         "id": 206,
         "name": "options",
         "type": "case_insensitive_map_t<ParsedExpression*>"
+      },
+      {
+        "id": 207,
+        "name": "materialized_view",
+        "type": "bool"
+      },
+      {
+        "id": 208,
+        "name": "materialized_view_query",
+        "type": "string"
       }
     ]
   },

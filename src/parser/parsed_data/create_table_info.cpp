@@ -35,6 +35,8 @@ unique_ptr<CreateInfo> CreateTableInfo::Copy() const {
 	if (query) {
 		result->query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());
 	}
+	result->materialized_view = materialized_view;
+	result->materialized_view_query = materialized_view_query;
 	return std::move(result);
 }
 
@@ -68,8 +70,11 @@ string CreateTableInfo::ExtraOptionsToString() const {
 }
 
 string CreateTableInfo::ToString() const {
-	string ret = GetCreatePrefix("TABLE");
+	string ret = GetCreatePrefix(materialized_view ? "MATERIALIZED VIEW" : "TABLE");
 	ret += QualifierToString(temporary ? "" : catalog, schema, table);
+	if (materialized_view && query == nullptr && !materialized_view_query.empty()) {
+		return ret + " AS " + materialized_view_query + ";";
+	}
 
 	if (query != nullptr) {
 		ret += TableCatalogEntry::ColumnNamesToSQL(columns);

@@ -47,6 +47,42 @@ CreateAsStmt:
 					$6->skipData = !($9);
 					$$ = (PGNode *) ctas;
 				}
+		| CREATE_P MATERIALIZED VIEW create_as_target AS SelectStmt opt_with_data
+				{
+					PGCreateTableAsStmt *ctas = makeNode(PGCreateTableAsStmt);
+					ctas->query = $6;
+					ctas->into = $4;
+					ctas->relkind = PG_OBJECT_MATVIEW;
+					ctas->is_select_into = false;
+					ctas->onconflict = PG_ERROR_ON_CONFLICT;
+					$4->rel->relpersistence = RELPERSISTENCE_PERMANENT;
+					$4->skipData = !($7);
+					$$ = (PGNode *) ctas;
+				}
+		| CREATE_P MATERIALIZED VIEW IF_P NOT EXISTS create_as_target AS SelectStmt opt_with_data
+				{
+					PGCreateTableAsStmt *ctas = makeNode(PGCreateTableAsStmt);
+					ctas->query = $9;
+					ctas->into = $7;
+					ctas->relkind = PG_OBJECT_MATVIEW;
+					ctas->is_select_into = false;
+					ctas->onconflict = PG_IGNORE_ON_CONFLICT;
+					$7->rel->relpersistence = RELPERSISTENCE_PERMANENT;
+					$7->skipData = !($10);
+					$$ = (PGNode *) ctas;
+				}
+		| CREATE_P OR REPLACE MATERIALIZED VIEW create_as_target AS SelectStmt opt_with_data
+				{
+					PGCreateTableAsStmt *ctas = makeNode(PGCreateTableAsStmt);
+					ctas->query = $8;
+					ctas->into = $6;
+					ctas->relkind = PG_OBJECT_MATVIEW;
+					ctas->is_select_into = false;
+					ctas->onconflict = PG_REPLACE_ON_CONFLICT;
+					$6->rel->relpersistence = RELPERSISTENCE_PERMANENT;
+					$6->skipData = !($9);
+					$$ = (PGNode *) ctas;
+				}
 		;
 
 

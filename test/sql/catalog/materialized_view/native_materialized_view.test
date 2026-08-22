@@ -1,0 +1,53 @@
+# name: test/sql/catalog/materialized_view/native_materialized_view.test
+# description: native DuckDB materialized view lifecycle and logical catalog discovery
+# group: [materialized_view]
+
+statement ok
+CREATE TABLE base(id INTEGER, grp INTEGER, val INTEGER)
+
+statement ok
+INSERT INTO base VALUES (1, 1, 10), (2, 1, 20), (3, 2, 5)
+
+statement ok
+CREATE MATERIALIZED VIEW mv AS
+SELECT grp, sum(val) AS total
+FROM base
+GROUP BY grp
+
+query II rowsort
+SELECT * FROM mv
+----
+1	30
+2	5
+
+query T
+SELECT table_type
+FROM information_schema.tables
+WHERE table_schema = 'main' AND table_name = 'mv'
+----
+MATERIALIZED VIEW
+
+statement ok
+INSERT INTO base VALUES (4, 2, 7)
+
+query II rowsort
+SELECT * FROM mv
+----
+1	30
+2	5
+
+statement ok
+REFRESH MATERIALIZED VIEW mv
+
+query II rowsort
+SELECT * FROM mv
+----
+1	30
+2	12
+
+statement ok
+DROP MATERIALIZED VIEW mv
+
+statement error Catalog Error
+SELECT * FROM mv
+
