@@ -23,6 +23,7 @@
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/common/type_visitor.hpp"
 
 namespace duckdb {
@@ -74,6 +75,40 @@ static void VerifyCompressionType(ClientContext &context, optional_ptr<StorageMa
 			    "Can't compress column \"%s\" with type '%s' (physical: %s) using compression type '%s'", col.Name(),
 			    logical_type.ToString(), EnumUtil::ToString(physical_type), CompressionTypeToString(compression_type));
 		}
+	}
+}
+
+static void CaptureMaterializedViewDependencies(ClientContext &context, LogicalOperator &op, CreateTableInfo &base) {
+	if (op.type == LogicalOperatorType::LOGICAL_GET) {
+		auto &get = op.Cast<LogicalGet>();
+		auto table = get.GetTable();
+		if (table && table->IsDuckTable()) {
+			bool already_captured = false;
+			for (idx_t i = 0; i < base.materialized_view_dependency_tables.size(); i++) {
+				if (base.materialized_view_dependency_catalogs[i] == table->ParentCatalog().GetName() &&
+				    base.materialized_view_dependency_schemas[i] == table->schema.name &&
+				    base.materialized_view_dependency_tables[i] == table->name) {
+					already_captured = true;
+					break;
+				}
+			}
+			if (!already_captured) {
+				base.dependencies.AddDependency(*table);
+				auto &storage = table->GetStorage();
+				auto generation = storage.GetModificationGeneration();
+				auto &transaction = DuckTransaction::Get(context, table->ParentCatalog());
+				if (transaction.HasModifiedTable(storage)) {
+					generation++;
+				}
+				base.materialized_view_dependency_catalogs.push_back(table->ParentCatalog().GetName());
+				base.materialized_view_dependency_schemas.push_back(table->schema.name);
+				base.materialized_view_dependency_tables.push_back(table->name);
+				base.materialized_view_dependency_generations.push_back(generation);
+			}
+		}
+	}
+	for (auto &child : op.children) {
+		CaptureMaterializedViewDependencies(context, *child, base);
 	}
 }
 
@@ -608,6 +643,9 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		auto query_obj = Bind(*base.query);
 		base.query.reset();
 		result->query = std::move(query_obj.plan);
+		if (base.materialized_view) {
+			CaptureMaterializedViewDependencies(context, *result->query, base);
+		}
 
 		// construct the set of columns based on the names and types of the query
 		auto &names = query_obj.names;

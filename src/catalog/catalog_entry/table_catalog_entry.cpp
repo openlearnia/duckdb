@@ -16,6 +16,7 @@
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_update.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 
 #include <sstream>
 
@@ -25,8 +26,12 @@ constexpr const char *TableCatalogEntry::Name;
 
 TableCatalogEntry::TableCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info)
     : StandardEntry(CatalogType::TABLE_ENTRY, schema, catalog, info.table), columns(std::move(info.columns)),
-      constraints(std::move(info.constraints)), materialized_view(info.materialized_view),
-      materialized_view_query(std::move(info.materialized_view_query)) {
+	  constraints(std::move(info.constraints)), materialized_view(info.materialized_view),
+	  materialized_view_query(std::move(info.materialized_view_query)),
+	  materialized_view_dependency_catalogs(std::move(info.materialized_view_dependency_catalogs)),
+	  materialized_view_dependency_schemas(std::move(info.materialized_view_dependency_schemas)),
+	  materialized_view_dependency_tables(std::move(info.materialized_view_dependency_tables)),
+	  materialized_view_dependency_generations(std::move(info.materialized_view_dependency_generations)) {
 	this->temporary = info.temporary;
 	this->dependencies = info.dependencies;
 	this->comment = info.comment;
@@ -104,7 +109,43 @@ unique_ptr<CreateInfo> TableCatalogEntry::GetInfo() const {
 	result->tags = tags;
 	result->materialized_view = materialized_view;
 	result->materialized_view_query = materialized_view_query;
+	result->materialized_view_dependency_catalogs = materialized_view_dependency_catalogs;
+	result->materialized_view_dependency_schemas = materialized_view_dependency_schemas;
+	result->materialized_view_dependency_tables = materialized_view_dependency_tables;
+	result->materialized_view_dependency_generations = materialized_view_dependency_generations;
 	return std::move(result);
+}
+
+bool TableCatalogEntry::MaterializedViewIsStale(ClientContext &context) {
+	if (!materialized_view) {
+		throw InternalException("MaterializedViewIsStale called on non-materialized table \"%s\"", name);
+	}
+	if (materialized_view_dependency_catalogs.empty() ||
+	    materialized_view_dependency_catalogs.size() != materialized_view_dependency_schemas.size() ||
+	    materialized_view_dependency_catalogs.size() != materialized_view_dependency_tables.size() ||
+	    materialized_view_dependency_catalogs.size() != materialized_view_dependency_generations.size()) {
+		return true;
+	}
+	for (idx_t i = 0; i < materialized_view_dependency_catalogs.size(); i++) {
+		EntryLookupInfo lookup(CatalogType::TABLE_ENTRY, materialized_view_dependency_tables[i]);
+		auto dependency = Catalog::GetEntry(context, materialized_view_dependency_catalogs[i],
+		                                    materialized_view_dependency_schemas[i], lookup,
+		                                    OnEntryNotFound::RETURN_NULL);
+		if (!dependency || dependency->type != CatalogType::TABLE_ENTRY ||
+		    !dependency->Cast<TableCatalogEntry>().IsDuckTable()) {
+			return true;
+		}
+		auto &storage = dependency->Cast<TableCatalogEntry>().GetStorage();
+		auto generation = storage.GetModificationGeneration();
+		auto &transaction = DuckTransaction::Get(context, dependency->ParentCatalog());
+		if (transaction.HasModifiedTable(storage)) {
+			generation++;
+		}
+		if (generation != materialized_view_dependency_generations[i]) {
+			return true;
+		}
+	}
+	return false;
 }
 
 string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<unique_ptr<Constraint>> &constraints) {

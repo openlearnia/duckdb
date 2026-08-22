@@ -24,6 +24,7 @@ public:
 	TableStatistics table_stats;
 	idx_t total_rows;
 	idx_t row_group_count;
+	idx_t modification_generation;
 	MetaBlockPointer block_pointer;
 };
 

@@ -2,7 +2,8 @@
 
 namespace duckdb {
 
-PersistentTableData::PersistentTableData(idx_t column_count) : total_rows(0), row_group_count(0) {
+PersistentTableData::PersistentTableData(idx_t column_count)
+    : total_rows(0), row_group_count(0), modification_generation(0) {
 }
 
 PersistentTableData::~PersistentTableData() {

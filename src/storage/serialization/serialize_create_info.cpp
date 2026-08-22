@@ -173,6 +173,14 @@ void CreateTableInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(206, "options", options);
 	serializer.WritePropertyWithDefault<bool>(207, "materialized_view", materialized_view);
 	serializer.WritePropertyWithDefault<string>(208, "materialized_view_query", materialized_view_query);
+	serializer.WritePropertyWithDefault<vector<string>>(209, "materialized_view_dependency_catalogs",
+	                                                   materialized_view_dependency_catalogs);
+	serializer.WritePropertyWithDefault<vector<string>>(210, "materialized_view_dependency_schemas",
+	                                                   materialized_view_dependency_schemas);
+	serializer.WritePropertyWithDefault<vector<string>>(211, "materialized_view_dependency_tables",
+	                                                   materialized_view_dependency_tables);
+	serializer.WritePropertyWithDefault<vector<idx_t>>(212, "materialized_view_dependency_generations",
+	                                                  materialized_view_dependency_generations);
 }
 
 unique_ptr<CreateInfo> CreateTableInfo::Deserialize(Deserializer &deserializer) {
@@ -186,6 +194,14 @@ unique_ptr<CreateInfo> CreateTableInfo::Deserialize(Deserializer &deserializer) 
 	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(206, "options", result->options);
 	deserializer.ReadPropertyWithDefault<bool>(207, "materialized_view", result->materialized_view);
 	deserializer.ReadPropertyWithDefault<string>(208, "materialized_view_query", result->materialized_view_query);
+	deserializer.ReadPropertyWithDefault<vector<string>>(209, "materialized_view_dependency_catalogs",
+	                                                    result->materialized_view_dependency_catalogs);
+	deserializer.ReadPropertyWithDefault<vector<string>>(210, "materialized_view_dependency_schemas",
+	                                                    result->materialized_view_dependency_schemas);
+	deserializer.ReadPropertyWithDefault<vector<string>>(211, "materialized_view_dependency_tables",
+	                                                    result->materialized_view_dependency_tables);
+	deserializer.ReadPropertyWithDefault<vector<idx_t>>(212, "materialized_view_dependency_generations",
+	                                                   result->materialized_view_dependency_generations);
 	return std::move(result);
 }
 

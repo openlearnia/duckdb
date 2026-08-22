@@ -177,6 +177,9 @@ public:
 	void FinalizeAppend(DuckTransaction &transaction, TableAppendState &state);
 	//! Commit the append
 	void CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count);
+	//! Advance the table-change generation once for a committed modifying transaction
+	void CommitModification();
+	idx_t GetModificationGeneration() const;
 	//! Write a segment of the table to the WAL
 	void WriteToLog(DuckTransaction &transaction, WriteAheadLog &log, idx_t row_start, idx_t count,
 	                optional_ptr<StorageCommitState> commit_state);
@@ -337,5 +340,7 @@ private:
 	shared_ptr<RowGroupCollection> row_groups;
 	//! The version of the data table
 	atomic<DataTableVersion> version;
+	//! Monotonic generation used by native materialized-view freshness tracking
+	atomic<idx_t> modification_generation;
 };
 } // namespace duckdb

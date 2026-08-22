@@ -17,7 +17,10 @@ PhysicalCreateTable::PhysicalCreateTable(PhysicalPlan &physical_plan, LogicalOpe
 // Source
 //===--------------------------------------------------------------------===//
 SourceResultType PhysicalCreateTable::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
-                                                      OperatorSourceInput &input) const {
+	OperatorSourceInput &input) const {
+	if (info->Base().materialized_view_skip_refresh) {
+		return SourceResultType::FINISHED;
+	}
 	auto &catalog = schema.catalog;
 	catalog.CreateTable(catalog.GetCatalogTransaction(context.client), schema, *info);
 

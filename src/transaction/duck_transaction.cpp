@@ -169,6 +169,16 @@ void DuckTransaction::ModifyTable(DataTable &tbl) {
 	modified_tables.insert(make_pair(table_ref, tbl.shared_from_this()));
 }
 
+bool DuckTransaction::HasModifiedTable(DataTable &tbl) {
+	{
+		lock_guard<mutex> guard(modified_tables_lock);
+		if (modified_tables.find(reference<DataTable>(tbl)) != modified_tables.end()) {
+			return true;
+		}
+	}
+	return storage->Find(tbl);
+}
+
 bool DuckTransaction::ChangesMade() {
 	return undo_buffer.ChangesMade() || storage->ChangesMade();
 }
@@ -280,6 +290,9 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, CommitInfo &commit_info,
 			commit_state->FlushCommit();
 		}
 		drop_state.FinalizeCommit();
+		for (auto &modified_table : modified_tables) {
+			modified_table.first.get().CommitModification();
+		}
 		return ErrorData();
 	} catch (std::exception &ex) {
 		undo_buffer.RevertCommit(iterator_state, this->transaction_id);

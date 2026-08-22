@@ -531,6 +531,9 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			if (!table.IsMaterializedView()) {
 				throw CatalogException("Table \"%s\" is not a materialized view", table.name);
 			}
+			if (create_info.materialized_view_if_stale) {
+				create_info.materialized_view_skip_refresh = !table.MaterializedViewIsStale(context);
+			}
 			Parser parser;
 			parser.ParseQuery(table.GetMaterializedViewQuery());
 			if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {

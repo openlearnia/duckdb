@@ -2,6 +2,8 @@
 # description: native DuckDB materialized view lifecycle and logical catalog discovery
 # group: [materialized_view]
 
+load __TEST_DIR__/native_materialized_view.db
+
 statement ok
 CREATE TABLE base(id INTEGER, grp INTEGER, val INTEGER)
 
@@ -45,26 +47,176 @@ SELECT * FROM mv
 1	30
 2	12
 
-statement error materialized view
+statement error
 INSERT INTO mv VALUES (3, 99)
+----
+<REGEX>:.*materialized view.*
 
-statement error materialized view
+statement error
 UPDATE mv SET total = 99
+----
+<REGEX>:.*materialized view.*
 
-statement error materialized view
+statement error
 DELETE FROM mv
+----
+<REGEX>:.*materialized view.*
 
-statement error materialized view
+statement error
 ALTER TABLE mv RENAME TO renamed_mv
+----
+<REGEX>:.*materialized view.*
 
-statement error DROP MATERIALIZED VIEW
+statement error
 DROP TABLE mv
+----
+<REGEX>:.*DROP MATERIALIZED VIEW.*
 
 statement ok
 REFRESH MATERIALIZED VIEW IF STALE mv
 
+# A fresh IF STALE must not execute the defining query. The sequence makes that observable.
+statement ok
+CREATE SEQUENCE refresh_probe START 1
+
+statement ok
+CREATE MATERIALIZED VIEW mv_probe AS
+SELECT id, nextval('refresh_probe') AS probe FROM base
+
+query I
+SELECT currval('refresh_probe')
+----
+4
+
+statement ok
+REFRESH MATERIALIZED VIEW IF STALE mv_probe
+
+query I
+SELECT currval('refresh_probe')
+----
+4
+
+statement ok
+INSERT INTO base VALUES (5, 3, 1)
+
+statement ok
+REFRESH MATERIALIZED VIEW IF STALE mv_probe
+
+query I
+SELECT currval('refresh_probe')
+----
+9
+
+query TTTI
+SELECT schema_name, view_name,
+       array_to_string(list_transform(dependencies, x -> regexp_extract(x, '[^.]+\.[^.]+$')), ','),
+       is_stale
+FROM duckdb_materialized_views()
+WHERE view_name = 'mv_probe'
+----
+main	mv_probe	main.base	false
+
+statement ok
+CHECKPOINT
+
+restart
+
+# Dependency generations and MV snapshots must agree after reopen.
+query I
+SELECT currval('refresh_probe')
+----
+10
+
+statement ok
+REFRESH MATERIALIZED VIEW IF STALE mv_probe
+
+query I
+SELECT currval('refresh_probe')
+----
+10
+
+statement ok
+DROP MATERIALIZED VIEW mv_probe
+
+# Same-transaction creation predicts the generation that will commit.
+statement ok
+BEGIN
+
+statement ok
+CREATE TABLE base_txn(id INTEGER, val INTEGER)
+
+statement ok
+INSERT INTO base_txn VALUES (1, 10), (2, 20)
+
+statement ok
+CREATE MATERIALIZED VIEW mv_txn AS SELECT sum(val) AS total FROM base_txn
+
+query I
+SELECT is_stale FROM duckdb_materialized_views() WHERE view_name = 'mv_txn'
+----
+false
+
+statement ok
+COMMIT
+
+query I
+SELECT is_stale FROM duckdb_materialized_views() WHERE view_name = 'mv_txn'
+----
+false
+
+# Uncommitted changes are stale to their own transaction, but rollback does not advance the generation.
+statement ok
+BEGIN
+
+statement ok
+UPDATE base_txn SET val = 99 WHERE id = 1
+
+query I
+SELECT is_stale FROM duckdb_materialized_views() WHERE view_name = 'mv_txn'
+----
+true
+
+statement ok
+ROLLBACK
+
+query I
+SELECT is_stale FROM duckdb_materialized_views() WHERE view_name = 'mv_txn'
+----
+false
+
+statement ok
+UPDATE base_txn SET val = 11 WHERE id = 1
+
+query I
+SELECT is_stale FROM duckdb_materialized_views() WHERE view_name = 'mv_txn'
+----
+true
+
+statement ok
+REFRESH MATERIALIZED VIEW IF STALE mv_txn
+
+query II
+SELECT total, is_stale
+FROM mv_txn, duckdb_materialized_views()
+WHERE view_name = 'mv_txn'
+----
+31	false
+
+statement ok
+DELETE FROM base_txn WHERE id = 2
+
+query I
+SELECT is_stale FROM duckdb_materialized_views() WHERE view_name = 'mv_txn'
+----
+true
+
+statement ok
+DROP MATERIALIZED VIEW mv_txn
+
 statement ok
 DROP MATERIALIZED VIEW mv
 
-statement error Catalog Error
+statement error
 SELECT * FROM mv
+----
+<REGEX>:.*Catalog Error.*

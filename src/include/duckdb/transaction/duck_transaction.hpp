@@ -99,6 +99,7 @@ public:
 
 	//! Hold an owning reference of the table, needed to safely reference it inside the transaction commit/undo logic
 	void ModifyTable(DataTable &tbl);
+	bool HasModifiedTable(DataTable &tbl);
 
 private:
 	//! The undo buffer is used to store old versions of rows that are updated
