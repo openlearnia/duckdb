@@ -41,7 +41,10 @@ struct CreateTableInfo : public CreateInfo {
 	vector<unique_ptr<ParsedExpression>> sort_keys;
 	//! Extra Table options if any
 	case_insensitive_map_t<unique_ptr<ParsedExpression>> options;
-	bool catalog_materialized_view = false;
+	//! Whether this physical table is a native materialized view
+	bool materialized_view = false;
+	//! Canonical defining SELECT for a native materialized view
+	string materialized_view_query;
 
 public:
 	DUCKDB_API unique_ptr<CreateInfo> Copy() const override;

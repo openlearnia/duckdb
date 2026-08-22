@@ -74,6 +74,14 @@ public:
 		return catalog_materialized_view;
 	}
 
+	DUCKDB_API bool IsMaterializedView() const {
+		return materialized_view;
+	}
+
+	DUCKDB_API const string &GetMaterializedViewQuery() const {
+		return materialized_view_query;
+	}
+
 	DUCKDB_API bool HasGeneratedColumns() const;
 
 	//! Returns whether or not a column with the given name exists
@@ -166,6 +174,9 @@ public:
 	                                                                 TriggerForEach for_each) const;
 
 protected:
+	//! Native MV marker and persisted defining query
+	bool materialized_view;
+	string materialized_view_query;
 	//! A list of columns that are part of this table
 	ColumnList columns;
 	//! A list of constraints that are part of this table

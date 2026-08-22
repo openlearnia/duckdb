@@ -194,7 +194,8 @@ void CreateTableInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(204, "partition_keys", partition_keys);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(205, "sort_keys", sort_keys);
 	serializer.WritePropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(206, "options", options);
-	serializer.WritePropertyWithDefault<bool>(207, "catalog_materialized_view", catalog_materialized_view);
+	serializer.WritePropertyWithDefault<bool>(207, "materialized_view", materialized_view);
+	serializer.WritePropertyWithDefault<string>(208, "materialized_view_query", materialized_view_query);
 }
 
 unique_ptr<CreateInfo> CreateTableInfo::Deserialize(Deserializer &deserializer) {
@@ -206,37 +207,8 @@ unique_ptr<CreateInfo> CreateTableInfo::Deserialize(Deserializer &deserializer) 
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(204, "partition_keys", result->partition_keys);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(205, "sort_keys", result->sort_keys);
 	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(206, "options", result->options);
-	deserializer.ReadPropertyWithDefault<bool>(207, "catalog_materialized_view", result->catalog_materialized_view);
-	result->SetName(std::move(table));
-	return std::move(result);
-}
-
-void CreateTriggerInfo::Serialize(Serializer &serializer) const {
-	CreateInfo::Serialize(serializer);
-	serializer.WritePropertyWithDefault<Identifier>(200, "trigger_name", qualified_name.Name());
-	serializer.WritePropertyWithDefault<unique_ptr<BaseTableRef>>(201, "base_table", base_table);
-	serializer.WriteProperty<TriggerTiming>(204, "timing", timing);
-	serializer.WriteProperty<TriggerEventType>(205, "event_type", event_type);
-	serializer.WritePropertyWithDefault<vector<Identifier>>(206, "columns", columns);
-	serializer.WriteProperty<TriggerForEach>(207, "for_each", for_each);
-	serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(208, "trigger_action", trigger_action);
-	serializer.WritePropertyWithDefault<Identifier>(209, "referencing_new_table", referencing_new_table);
-	serializer.WritePropertyWithDefault<Identifier>(210, "referencing_old_table", referencing_old_table);
-}
-
-unique_ptr<CreateInfo> CreateTriggerInfo::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::unique_ptr<CreateTriggerInfo>(new CreateTriggerInfo());
-	auto trigger_name = deserializer.ReadPropertyWithDefault<Identifier>(200, "trigger_name");
-	auto base_table = deserializer.ReadPropertyWithDefault<unique_ptr<TableRef>>(201, "base_table");
-	result->base_table = unique_ptr_cast<TableRef, BaseTableRef>(std::move(base_table));
-	deserializer.ReadProperty<TriggerTiming>(204, "timing", result->timing);
-	deserializer.ReadProperty<TriggerEventType>(205, "event_type", result->event_type);
-	deserializer.ReadPropertyWithDefault<vector<Identifier>>(206, "columns", result->columns);
-	deserializer.ReadProperty<TriggerForEach>(207, "for_each", result->for_each);
-	deserializer.ReadPropertyWithDefault<unique_ptr<QueryNode>>(208, "trigger_action", result->trigger_action);
-	deserializer.ReadPropertyWithDefault<Identifier>(209, "referencing_new_table", result->referencing_new_table);
-	deserializer.ReadPropertyWithDefault<Identifier>(210, "referencing_old_table", result->referencing_old_table);
-	result->SetName(std::move(trigger_name));
+	deserializer.ReadPropertyWithDefault<bool>(207, "materialized_view", result->materialized_view);
+	deserializer.ReadPropertyWithDefault<string>(208, "materialized_view_query", result->materialized_view_query);
 	return std::move(result);
 }
 
