@@ -500,6 +500,8 @@ std::string Transformer::NodetypeToString(duckdb_libpgquery::PGNodeTag type) { /
 		return "T_IndexStmt";
 	case duckdb_libpgquery::T_PGCreateFunctionStmt:
 		return "T_CreateFunctionStmt";
+	case duckdb_libpgquery::T_PGCreateProcedureStmt:
+		return "T_CreateProcedureStmt";
 	case duckdb_libpgquery::T_PGAlterFunctionStmt:
 		return "T_AlterFunctionStmt";
 	case duckdb_libpgquery::T_PGDoStmt:

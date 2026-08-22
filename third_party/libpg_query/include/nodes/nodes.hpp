@@ -338,6 +338,7 @@ typedef enum PGNodeTag {
 	T_PGIndexStmt,
 	T_PGFunctionDefinition,
 	T_PGCreateFunctionStmt,
+	T_PGCreateProcedureStmt,
 	T_PGAlterFunctionStmt,
 	T_PGDoStmt,
 	T_PGRenameStmt,

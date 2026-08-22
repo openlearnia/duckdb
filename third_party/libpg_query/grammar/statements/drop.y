@@ -75,6 +75,7 @@ drop_type_any_name:
 			| FUNCTION								{ $$ = PG_OBJECT_FUNCTION; }
 			| MACRO									{ $$ = PG_OBJECT_FUNCTION; }
 			| MACRO TABLE                           { $$ = PG_OBJECT_TABLE_MACRO; }
+			| PROCEDURE								{ $$ = PG_OBJECT_PROCEDURE; }
 			| VIEW									{ $$ = PG_OBJECT_VIEW; }
 			| MATERIALIZED VIEW						{ $$ = PG_OBJECT_MATVIEW; }
 			| INDEX									{ $$ = PG_OBJECT_INDEX; }

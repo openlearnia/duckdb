@@ -33,6 +33,8 @@ string CatalogTypeToString(CatalogType type) {
 		return "Macro Function";
 	case CatalogType::TABLE_MACRO_ENTRY:
 		return "Table Macro Function";
+	case CatalogType::PROCEDURE_ENTRY:
+		return "Procedure";
 	case CatalogType::VIEW_ENTRY:
 		return "View";
 	case CatalogType::INDEX_ENTRY:
@@ -95,6 +97,9 @@ CatalogType CatalogTypeFromString(const string &type) {
 	}
 	if (type == "Table Macro Function") {
 		return CatalogType::TABLE_MACRO_ENTRY;
+	}
+	if (type == "Procedure") {
+		return CatalogType::PROCEDURE_ENTRY;
 	}
 	if (type == "View") {
 		return CatalogType::VIEW_ENTRY;

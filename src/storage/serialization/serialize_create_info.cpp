@@ -13,6 +13,7 @@
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
+#include "duckdb/parser/parsed_data/create_procedure_info.hpp"
 
 namespace duckdb {
 
@@ -50,6 +51,9 @@ unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 		break;
 	case CatalogType::MACRO_ENTRY:
 		result = CreateMacroInfo::Deserialize(deserializer);
+		break;
+	case CatalogType::PROCEDURE_ENTRY:
+		result = CreateProcedureInfo::Deserialize(deserializer);
 		break;
 	case CatalogType::SCHEMA_ENTRY:
 		result = CreateSchemaInfo::Deserialize(deserializer);
@@ -127,6 +131,27 @@ unique_ptr<CreateInfo> CreateMacroInfo::Deserialize(Deserializer &deserializer) 
 	auto extra_functions = deserializer.ReadPropertyWithDefault<vector<unique_ptr<MacroFunction>>>(202, "extra_functions");
 	auto result = duckdb::unique_ptr<CreateMacroInfo>(new CreateMacroInfo(deserializer.Get<CatalogType>(), std::move(function), std::move(extra_functions)));
 	result->name = std::move(name);
+	return std::move(result);
+}
+
+void CreateProcedureInfo::Serialize(Serializer &serializer) const {
+	CreateInfo::Serialize(serializer);
+	serializer.WritePropertyWithDefault<string>(200, "name", name);
+	serializer.WritePropertyWithDefault<vector<LogicalType>>(201, "parameter_types", parameter_types);
+	serializer.WritePropertyWithDefault<vector<string>>(202, "parameter_names", parameter_names);
+	serializer.WriteProperty<LogicalType>(203, "return_type", return_type);
+	serializer.WritePropertyWithDefault<string>(204, "language", language);
+	serializer.WritePropertyWithDefault<string>(205, "body", body);
+}
+
+unique_ptr<CreateInfo> CreateProcedureInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<CreateProcedureInfo>(new CreateProcedureInfo());
+	deserializer.ReadPropertyWithDefault<string>(200, "name", result->name);
+	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(201, "parameter_types", result->parameter_types);
+	deserializer.ReadPropertyWithDefault<vector<string>>(202, "parameter_names", result->parameter_names);
+	deserializer.ReadProperty<LogicalType>(203, "return_type", result->return_type);
+	deserializer.ReadPropertyWithDefault<string>(204, "language", result->language);
+	deserializer.ReadPropertyWithDefault<string>(205, "body", result->body);
 	return std::move(result);
 }
 

@@ -62,6 +62,7 @@ ExplainableStmt:
 			| CopyStmt
 			| CreateAsStmt
 			| CreateFunctionStmt
+			| CreateProcedureStmt
 			| CreateSchemaStmt
 			| CreateSeqStmt
 			| CreateStmt

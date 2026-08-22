@@ -1357,6 +1357,7 @@ typedef enum PGObjectType {
 	PG_OBJECT_FOREIGN_TABLE,
 	PG_OBJECT_FUNCTION,
 	PG_OBJECT_TABLE_MACRO,
+	PG_OBJECT_PROCEDURE,
 	PG_OBJECT_INDEX,
 	PG_OBJECT_LANGUAGE,
 	PG_OBJECT_LARGEOBJECT,
@@ -1776,6 +1777,20 @@ typedef struct PGCreateFunctionStmt {
 	PGList *functions;
 	PGOnCreateConflict onconflict;
 } PGCreateFunctionStmt;
+
+/* ----------------------
+ *		CREATE PROCEDURE Statement
+ * ----------------------
+ */
+typedef struct PGCreateProcedureStmt {
+	PGNodeTag type;
+	PGRangeVar *name;
+	PGList *params;
+	PGTypeName *returnType;
+	char *language;
+	char *body;
+	PGOnCreateConflict onconflict;
+} PGCreateProcedureStmt;
 
 /* ----------------------
  *		Drop Table|Sequence|View|Index|Type|Domain|Conversion|Schema Statement

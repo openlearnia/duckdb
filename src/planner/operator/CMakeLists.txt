@@ -4,6 +4,8 @@ add_library_unity(
   logical_aggregate.cpp
   logical_any_join.cpp
   logical_column_data_get.cpp
+
+  logical_call_procedure.cpp
   logical_comparison_join.cpp
   logical_copy_to_file.cpp
   logical_copy_database.cpp

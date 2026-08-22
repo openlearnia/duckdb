@@ -32,6 +32,9 @@ unique_ptr<SQLStatement> Transformer::TransformDrop(duckdb_libpgquery::PGDropStm
 	case duckdb_libpgquery::PG_OBJECT_TABLE_MACRO:
 		info.type = CatalogType::TABLE_MACRO_ENTRY;
 		break;
+	case duckdb_libpgquery::PG_OBJECT_PROCEDURE:
+		info.type = CatalogType::PROCEDURE_ENTRY;
+		break;
 	case duckdb_libpgquery::PG_OBJECT_TYPE:
 		info.type = CatalogType::TYPE_ENTRY;
 		break;

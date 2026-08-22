@@ -1,4 +1,5 @@
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/parser/parsed_data/create_procedure_info.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/common/checksum.hpp"
@@ -241,6 +242,8 @@ protected:
 
 	void ReplayCreateTableMacro();
 	void ReplayDropTableMacro();
+	void ReplayCreateProcedure();
+	void ReplayDropProcedure();
 
 	void ReplayCreateIndex();
 	void ReplayDropIndex();
@@ -610,6 +613,12 @@ void WriteAheadLogDeserializer::ReplayEntry(WALType entry_type) {
 		break;
 	case WALType::DROP_TABLE_MACRO:
 		ReplayDropTableMacro();
+		break;
+	case WALType::CREATE_PROCEDURE:
+		ReplayCreateProcedure();
+		break;
+	case WALType::DROP_PROCEDURE:
+		ReplayDropProcedure();
 		break;
 	case WALType::CREATE_INDEX:
 		ReplayCreateIndex();
@@ -986,6 +995,25 @@ void WriteAheadLogDeserializer::ReplayDropTableMacro() {
 		return;
 	}
 
+	catalog.DropEntry(context, info);
+}
+
+void WriteAheadLogDeserializer::ReplayCreateProcedure() {
+	auto entry = deserializer.ReadProperty<unique_ptr<CreateInfo>>(101, "procedure");
+	if (DeserializeOnly()) {
+		return;
+	}
+	catalog.CreateFunction(context, entry->Cast<CreateProcedureInfo>());
+}
+
+void WriteAheadLogDeserializer::ReplayDropProcedure() {
+	DropInfo info;
+	info.type = CatalogType::PROCEDURE_ENTRY;
+	info.schema = deserializer.ReadProperty<string>(101, "schema");
+	info.name = deserializer.ReadProperty<string>(102, "name");
+	if (DeserializeOnly()) {
+		return;
+	}
 	catalog.DropEntry(context, info);
 }
 

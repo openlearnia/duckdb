@@ -1,0 +1,50 @@
+# name: test/sql/catalog/procedure.test
+# description: JavaScript stored procedures are catalog objects invoked by CALL
+
+load __TEST_DIR__/procedure.db
+
+statement ok
+CREATE PROCEDURE answer()
+RETURNS INTEGER
+LANGUAGE JAVASCRIPT
+AS $$
+return 42;
+$$;
+
+query I
+CALL answer();
+----
+42
+
+statement ok
+CREATE PROCEDURE plus_one(x INTEGER)
+RETURNS INTEGER
+LANGUAGE JAVASCRIPT
+AS $$
+return x + 1;
+$$;
+
+query I
+CALL plus_one(41);
+----
+42
+
+statement ok
+CHECKPOINT;
+
+restart
+
+query I
+CALL plus_one(41);
+----
+42
+
+statement error
+CREATE PROCEDURE invalid_parameter("not a javascript identifier" INTEGER)
+RETURNS INTEGER
+LANGUAGE JAVASCRIPT
+AS $$
+return 1;
+$$;
+----
+JavaScript identifier

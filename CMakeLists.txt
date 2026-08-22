@@ -864,6 +864,9 @@ add_third_party(hyperloglog)
 add_third_party(libpg_query)
 add_third_party(mbedtls)
 add_third_party(miniz)
+set(QJS_ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
+set(QJS_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+add_third_party(quickjs-ng)
 add_third_party(re2)
 add_third_party(skiplist)
 add_third_party(utf8proc)
@@ -942,5 +945,4 @@ if(EXISTS ${CMAKE_CONFIG_TEMPLATE} AND EXISTS ${CMAKE_CONFIG_VERSION_TEMPLATE})
           "${PROJECT_BINARY_DIR}/DuckDBConfigVersion.cmake"
     DESTINATION "${INSTALL_CMAKE_DIR}")
 endif()
-
 

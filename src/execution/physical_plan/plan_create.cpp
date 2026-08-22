@@ -22,7 +22,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreate &op) {
 		return Make<PhysicalCreateSchema>(unique_ptr_cast<CreateInfo, CreateSchemaInfo>(std::move(op.info)),
 		                                  op.estimated_cardinality);
 	case LogicalOperatorType::LOGICAL_CREATE_MACRO:
-		return Make<PhysicalCreateFunction>(unique_ptr_cast<CreateInfo, CreateMacroInfo>(std::move(op.info)),
+		return Make<PhysicalCreateFunction>(unique_ptr_cast<CreateInfo, CreateFunctionInfo>(std::move(op.info)),
 		                                    op.estimated_cardinality);
 	case LogicalOperatorType::LOGICAL_CREATE_TYPE: {
 		auto &create = Make<PhysicalCreateType>(unique_ptr_cast<CreateInfo, CreateTypeInfo>(std::move(op.info)),
