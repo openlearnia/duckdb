@@ -54,8 +54,32 @@ public:
 	virtual void CheckModifySchema(ClientContext &context, Catalog &catalog, uint8_t privileges,
 	                              const string &schema_name, const string &object_name) = 0;
 
-	//! Called before ATTACH / DETACH statements are executed.
+	//! Called before ATTACH / DETACH / LOAD / INSTALL statements are executed.
 	virtual void CheckEngineManagement(ClientContext &context) = 0;
+
+	//! When true, prepared statements are re-bound before every execution
+	//! so statement checks re-run (e.g. after a role change). Providers
+	//! that only enforce conditionally should return their active state.
+	virtual bool RequireStatementRebind(ClientContext &context) {
+		return false;
+	}
+
+	//! Called when a statement binds a file-reading table function
+	//! (read_csv / read_parquet / read_json / glob / read_text and
+	//! friends). Lets providers gate direct file access that would bypass
+	//! catalog-level privileges.
+	virtual void CheckReadFile(ClientContext &context, const string &function_name) = 0;
+
+	//! Names of table functions that read arbitrary files and are gated by
+	//! CheckReadFile
+	static bool IsFileReadingFunction(const string &function_name) {
+		return function_name == "read_csv" || function_name == "read_csv_auto" || function_name == "csv_scan" ||
+		       function_name == "read_parquet" || function_name == "parquet_scan" ||
+		       function_name == "read_json" || function_name == "read_json_auto" ||
+		       function_name == "json_scan" || function_name == "read_ndjson" ||
+		       function_name == "read_ndjson_auto" || function_name == "read_text" ||
+		       function_name == "read_text_auto" || function_name == "glob" || function_name == "glob_parquet";
+	}
 
 	//! Internal catalogs that never route through the provider (system,
 	//! temp, and hidden DuckLake metadata databases).
@@ -79,6 +103,8 @@ public:
 	                       const string &object_name) override {
 	}
 	void CheckEngineManagement(ClientContext &context) override {
+	}
+	void CheckReadFile(ClientContext &context, const string &function_name) override {
 	}
 };
 

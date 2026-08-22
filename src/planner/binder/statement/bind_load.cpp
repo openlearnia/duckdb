@@ -1,3 +1,4 @@
+#include "duckdb/main/config.hpp"
 #include "duckdb/parser/statement/load_statement.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_simple.hpp"
@@ -10,6 +11,9 @@ BoundStatement Binder::Bind(LoadStatement &stmt) {
 	BoundStatement result;
 	result.types = {LogicalType::BOOLEAN};
 	result.names = {"Success"};
+
+	// authorization: LOAD / INSTALL load code into the engine
+	DBConfig::GetConfig(context).GetAuthorizationProvider().CheckEngineManagement(context);
 
 	// Ensure the repository exists if it's an alias
 	if (!stmt.info->repository.empty() && stmt.info->repo_is_alias) {

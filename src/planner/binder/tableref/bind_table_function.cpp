@@ -1,3 +1,4 @@
+#include "duckdb/main/config.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
 #include "duckdb/common/algorithm.hpp"
@@ -187,6 +188,14 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 	auto function_name = GetAlias(ref);
 	auto &column_name_alias = ref.column_name_alias;
 	auto bind_index = GenerateTableIndex();
+	// authorization: gate file-reading table functions (use the actual
+	// function name - the alias may be user-defined)
+	if (ref.function && ref.function->GetExpressionType() == ExpressionType::FUNCTION) {
+		auto &bound_fn = ref.function->Cast<FunctionExpression>();
+		if (AuthorizationProvider::IsFileReadingFunction(bound_fn.function_name)) {
+			DBConfig::GetConfig(context).GetAuthorizationProvider().CheckReadFile(context, bound_fn.function_name);
+		}
+	}
 	// perform the binding
 	unique_ptr<FunctionData> bind_data;
 	vector<LogicalType> return_types;

@@ -324,6 +324,10 @@ public:
 	//! everything, the default). Consulted from binder choke points.
 	void SetAuthorizationProvider(const shared_ptr<AuthorizationProvider> &provider);
 	AuthorizationProvider &GetAuthorizationProvider() const;
+	//! True when an extension installed a non-null authorization provider
+	bool HasAuthorizationProvider() const {
+		return authorization_provider != nullptr;
+	}
 
 private:
 	mutable mutex config_lock;
