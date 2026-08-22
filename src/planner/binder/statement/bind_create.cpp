@@ -1,3 +1,4 @@
+#include "duckdb/main/config.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
@@ -454,6 +455,17 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	BoundStatement result;
 	result.names = {"Count"};
 	result.types = {LogicalType::BIGINT};
+
+	// authorization: CREATE of a catalog object (table/view/schema/macro/...)
+	{
+		BindSchemaOrCatalog(stmt.info->catalog, stmt.info->schema);
+		auto bound_catalog = Catalog::GetCatalogEntry(context, stmt.info->catalog);
+		if (bound_catalog && !AuthorizationProvider::ShouldSkipCatalog(bound_catalog->GetName())) {
+			DBConfig::GetConfig(context).GetAuthorizationProvider().CheckModifySchema(
+			    context, *bound_catalog, AUTH_CREATE, stmt.info->schema.empty() ? "main" : stmt.info->schema,
+			    stmt.info->type == CatalogType::SCHEMA_ENTRY ? stmt.info->Cast<CreateInfo>().schema : "");
+		}
+	}
 
 	auto catalog_type = stmt.info->type;
 	auto &properties = GetStatementProperties();

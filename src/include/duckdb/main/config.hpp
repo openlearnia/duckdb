@@ -36,6 +36,7 @@
 #include "duckdb/main/user_settings.hpp"
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/common/types/type_manager.hpp"
+#include "duckdb/main/authorization_provider.hpp"
 
 namespace duckdb {
 
@@ -319,6 +320,11 @@ public:
 	void SetHTTPUtil(const shared_ptr<HTTPUtil> &new_http_util);
 	HTTPUtil &GetHTTPUtil() const;
 
+	//! Install a pluggable authorization provider (nullptr = allow
+	//! everything, the default). Consulted from binder choke points.
+	void SetAuthorizationProvider(const shared_ptr<AuthorizationProvider> &provider);
+	AuthorizationProvider &GetAuthorizationProvider() const;
+
 private:
 	mutable mutex config_lock;
 	unique_ptr<CompressionFunctionSet> compression_functions;
@@ -331,6 +337,8 @@ private:
 	bool is_user_config = true;
 	//! HTTP Request utility functions
 	shared_ptr<HTTPUtil> http_util;
+	//! Pluggable authorization provider (null = no statement checks)
+	shared_ptr<AuthorizationProvider> authorization_provider;
 	vector<shared_ptr<HTTPUtil>> old_http_utils;
 	mutex http_util_lock;
 };

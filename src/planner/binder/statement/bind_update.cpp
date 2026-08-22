@@ -1,3 +1,4 @@
+#include "duckdb/main/config.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -130,6 +131,11 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 		throw BinderException("Can only update base table");
 	}
 	auto &table = *table_ptr;
+	// authorization: UPDATE on this table
+	if (!table.temporary && !AuthorizationProvider::ShouldSkipCatalog(table.ParentCatalog().GetName())) {
+		DBConfig::GetConfig(context).GetAuthorizationProvider().CheckModifyTable(
+		    context, table.ParentCatalog(), AUTH_UPDATE, table.ParentSchema().name, table.name);
+	}
 
 	optional_ptr<LogicalGet> get;
 	if (stmt.from_table) {

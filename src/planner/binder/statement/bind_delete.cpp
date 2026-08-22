@@ -1,3 +1,4 @@
+#include "duckdb/main/config.hpp"
 #include "duckdb/parser/statement/delete_statement.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression_binder/where_binder.hpp"
@@ -23,6 +24,11 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 		throw BinderException("Can only delete from base table");
 	}
 	auto &table = *table_ptr;
+	// authorization: DELETE on this table
+	if (!table.temporary && !AuthorizationProvider::ShouldSkipCatalog(table.ParentCatalog().GetName())) {
+		DBConfig::GetConfig(context).GetAuthorizationProvider().CheckModifyTable(
+		    context, table.ParentCatalog(), AUTH_DELETE, table.ParentSchema().name, table.name);
+	}
 	if (!table.temporary) {
 		// delete from persistent table: not read only!
 		auto &properties = GetStatementProperties();

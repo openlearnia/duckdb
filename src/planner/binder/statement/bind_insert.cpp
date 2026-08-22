@@ -1,3 +1,4 @@
+#include "duckdb/main/config.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
@@ -536,6 +537,11 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 
 	BindSchemaOrCatalog(stmt.catalog, stmt.schema);
 	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, stmt.catalog, stmt.schema, stmt.table);
+	// authorization: INSERT into this table
+	if (!table.temporary && !AuthorizationProvider::ShouldSkipCatalog(table.ParentCatalog().GetName())) {
+		DBConfig::GetConfig(context).GetAuthorizationProvider().CheckModifyTable(
+		    context, table.ParentCatalog(), AUTH_INSERT, table.ParentSchema().name, table.name);
+	}
 	if (stmt.on_conflict_info) {
 		// generate a MERGE INTO statement and bind it instead
 		auto merge_into = GenerateMergeInto(stmt, table);

@@ -23,6 +23,10 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 	case CatalogType::SCHEMA_ENTRY: {
 		// dropping a schema is never read-only because there are no temporary schemas
 		auto &catalog = Catalog::GetCatalog(context, stmt.info->catalog);
+		if (!AuthorizationProvider::ShouldSkipCatalog(catalog.GetName())) {
+			// authorization: DROP SCHEMA
+			DBConfig::GetConfig(context).GetAuthorizationProvider().CheckModifySchema(context, catalog, AUTH_DROP, stmt.info->name, stmt.info->name);
+		}
 		properties.RegisterDBModify(catalog, context, DatabaseModificationType::DROP_CATALOG_ENTRY);
 		break;
 	}
@@ -35,6 +39,12 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 	case CatalogType::TYPE_ENTRY: {
 		BindSchemaOrCatalog(stmt.info->catalog, stmt.info->schema);
 		auto catalog = Catalog::GetCatalogEntry(context, stmt.info->catalog);
+		if (catalog && !AuthorizationProvider::ShouldSkipCatalog(catalog->GetName())) {
+			// authorization: DROP of a catalog object
+			DBConfig::GetConfig(context).GetAuthorizationProvider().CheckModifySchema(
+			    context, *catalog, AUTH_DROP, stmt.info->schema.empty() ? "main" : stmt.info->schema,
+			    stmt.info->name);
+		}
 		if (catalog) {
 			// mark catalog as accessed
 			properties.RegisterDBRead(*catalog, context);

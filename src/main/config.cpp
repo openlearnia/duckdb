@@ -957,6 +957,15 @@ bool SerializationCompatibility::Compare(idx_t property_version) const {
 	return property_version <= serialization_version;
 }
 
+void DBConfig::SetAuthorizationProvider(const shared_ptr<AuthorizationProvider> &provider) {
+	authorization_provider = provider;
+}
+
+AuthorizationProvider &DBConfig::GetAuthorizationProvider() const {
+	static NullAuthorizationProvider null_provider;
+	return authorization_provider ? *authorization_provider : null_provider;
+}
+
 void DBConfig::SetHTTPUtil(const shared_ptr<HTTPUtil> &new_http_util) {
 	lock_guard<mutex> guard(http_util_lock);
 	old_http_utils.push_back(http_util);

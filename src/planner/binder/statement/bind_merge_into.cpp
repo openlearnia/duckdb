@@ -1,3 +1,4 @@
+#include "duckdb/main/config.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/statement/merge_into_statement.hpp"
 #include "duckdb/planner/tableref/bound_joinref.hpp"
@@ -204,6 +205,12 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 		throw BinderException("Can only merge into base tables!");
 	}
 	auto &table = *table_ptr;
+	// authorization: MERGE can insert, update and delete the target
+	if (!table.temporary && !AuthorizationProvider::ShouldSkipCatalog(table.ParentCatalog().GetName())) {
+		DBConfig::GetConfig(context).GetAuthorizationProvider().CheckModifyTable(
+		    context, table.ParentCatalog(), AUTH_INSERT | AUTH_UPDATE | AUTH_DELETE, table.ParentSchema().name,
+		    table.name);
+	}
 	if (!table.temporary) {
 		// update of persistent table: not read only!
 		auto &properties = GetStatementProperties();

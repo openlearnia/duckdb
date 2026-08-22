@@ -1,3 +1,4 @@
+#include "duckdb/main/config.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/statement/attach_statement.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
@@ -11,6 +12,9 @@ BoundStatement Binder::Bind(AttachStatement &stmt) {
 	BoundStatement result;
 	result.types = {LogicalType::BOOLEAN};
 	result.names = {"Success"};
+
+	// authorization: ATTACH is engine management
+	DBConfig::GetConfig(context).GetAuthorizationProvider().CheckEngineManagement(context);
 
 	// bind the options
 	TableFunctionBinder option_binder(*this, context, "Attach", "Attach parameter");
