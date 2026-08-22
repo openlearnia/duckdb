@@ -32,11 +32,27 @@ MATERIALIZED VIEW
 statement ok
 INSERT INTO base VALUES (4, 2, 7)
 
+statement ok
+SET materialized_view_stale_read = 'error'
+
+statement error
+SELECT * FROM mv
+----
+stale
+
+statement ok
+SET materialized_view_stale_read = 'allow'
+
 query II rowsort
 SELECT * FROM mv
 ----
 1	30
 2	5
+
+statement error
+SET materialized_view_stale_read = 'invalid'
+----
+supported options
 
 statement ok
 REFRESH MATERIALIZED VIEW mv
