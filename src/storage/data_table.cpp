@@ -65,8 +65,10 @@ DataTable::DataTable(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_m
                      const string &table, vector<ColumnDefinition> column_definitions_p,
                      unique_ptr<PersistentTableData> data)
     : db(db), info(make_shared_ptr<DataTableInfo>(db, std::move(table_io_manager_p), schema, table)),
-      column_definitions(std::move(column_definitions_p)), version(DataTableVersion::MAIN_TABLE),
-      modification_generation(data ? data->modification_generation : 0) {
+	  column_definitions(std::move(column_definitions_p)), version(DataTableVersion::MAIN_TABLE),
+	  modification_generation(data ? data->modification_generation : 0),
+	  append_generation(data ? data->append_generation : 0), delete_generation(data ? data->delete_generation : 0),
+	  update_generation(data ? data->update_generation : 0), appended_rows(data ? data->appended_rows : 0) {
 	// initialize the table with the existing data from disk, if any
 	auto types = GetTypes();
 	auto &io_manager = TableIOManager::Get(*this);
@@ -82,8 +84,10 @@ DataTable::DataTable(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_m
 }
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition &new_column, Expression &default_value)
-    : db(parent.db), info(parent.info), version(DataTableVersion::MAIN_TABLE),
-      modification_generation(parent.GetModificationGeneration()) {
+	: db(parent.db), info(parent.info), version(DataTableVersion::MAIN_TABLE),
+	  modification_generation(parent.GetModificationGeneration()), append_generation(parent.GetAppendGeneration()),
+	  delete_generation(parent.GetDeleteGeneration()), update_generation(parent.GetUpdateGeneration()),
+	  appended_rows(parent.GetAppendedRows()) {
 	// add the column definitions from this DataTable
 	for (auto &column_def : parent.column_definitions) {
 		column_definitions.emplace_back(column_def.Copy());
@@ -108,8 +112,10 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 }
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_column)
-    : db(parent.db), info(parent.info), version(DataTableVersion::MAIN_TABLE),
-      modification_generation(parent.GetModificationGeneration()) {
+	: db(parent.db), info(parent.info), version(DataTableVersion::MAIN_TABLE),
+	  modification_generation(parent.GetModificationGeneration()), append_generation(parent.GetAppendGeneration()),
+	  delete_generation(parent.GetDeleteGeneration()), update_generation(parent.GetUpdateGeneration()),
+	  appended_rows(parent.GetAppendedRows()) {
 	// prevent any new tuples from being added to the parent
 	auto &local_storage = LocalStorage::Get(context, db);
 	lock_guard<mutex> parent_lock(parent.append_lock);
@@ -157,8 +163,10 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 }
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, BoundConstraint &constraint)
-    : db(parent.db), info(parent.info), row_groups(parent.row_groups), version(DataTableVersion::MAIN_TABLE),
-      modification_generation(parent.GetModificationGeneration()) {
+	: db(parent.db), info(parent.info), row_groups(parent.row_groups), version(DataTableVersion::MAIN_TABLE),
+	  modification_generation(parent.GetModificationGeneration()), append_generation(parent.GetAppendGeneration()),
+	  delete_generation(parent.GetDeleteGeneration()), update_generation(parent.GetUpdateGeneration()),
+	  appended_rows(parent.GetAppendedRows()) {
 	// ALTER COLUMN to add a new constraint.
 
 	// Bind all indexes.
@@ -179,8 +187,10 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, BoundConstraint 
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, const LogicalType &target_type,
                      const vector<StorageIndex> &bound_columns, Expression &cast_expr)
-    : db(parent.db), info(parent.info), version(DataTableVersion::MAIN_TABLE),
-      modification_generation(parent.GetModificationGeneration()) {
+	: db(parent.db), info(parent.info), version(DataTableVersion::MAIN_TABLE),
+	  modification_generation(parent.GetModificationGeneration()), append_generation(parent.GetAppendGeneration()),
+	  delete_generation(parent.GetDeleteGeneration()), update_generation(parent.GetUpdateGeneration()),
+	  appended_rows(parent.GetAppendedRows()) {
 	auto &local_storage = LocalStorage::Get(context, db);
 	// prevent any tuples from being added to the parent
 	lock_guard<mutex> lock(append_lock);
@@ -1309,14 +1319,40 @@ void DataTable::WriteToLog(DuckTransaction &transaction, WriteAheadLog &log, idx
 void DataTable::CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count) {
 	lock_guard<mutex> lock(append_lock);
 	row_groups->CommitAppend(commit_id, row_start, count);
+	appended_rows += count;
 }
 
-void DataTable::CommitModification() {
+void DataTable::CommitModification(uint8_t modification_type) {
 	modification_generation++;
+	if (modification_type & static_cast<uint8_t>(TableModificationType::APPEND)) {
+		append_generation++;
+	}
+	if (modification_type & static_cast<uint8_t>(TableModificationType::DELETE)) {
+		delete_generation++;
+	}
+	if (modification_type & static_cast<uint8_t>(TableModificationType::UPDATE)) {
+		update_generation++;
+	}
 }
 
 idx_t DataTable::GetModificationGeneration() const {
 	return modification_generation.load();
+}
+
+idx_t DataTable::GetAppendGeneration() const {
+	return append_generation.load();
+}
+
+idx_t DataTable::GetDeleteGeneration() const {
+	return delete_generation.load();
+}
+
+idx_t DataTable::GetUpdateGeneration() const {
+	return update_generation.load();
+}
+
+idx_t DataTable::GetAppendedRows() const {
+	return appended_rows.load();
 }
 
 void DataTable::RevertAppendInternal(idx_t start_row) {
@@ -1775,7 +1811,7 @@ void DataTable::Update(TableUpdateState &state, ClientContext &context, Vector &
 	// otherwise global storage
 	if (n_global_update > 0) {
 		auto &transaction = DuckTransaction::Get(context, db);
-		transaction.ModifyTable(*this);
+		transaction.ModifyTable(*this, TableModificationType::UPDATE);
 		updates_slice.Slice(updates, sel_global_update, n_global_update);
 		updates_slice.Flatten();
 		row_ids_slice.Slice(row_ids, sel_global_update, n_global_update);

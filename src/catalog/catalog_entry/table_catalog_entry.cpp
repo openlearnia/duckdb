@@ -31,7 +31,15 @@ TableCatalogEntry::TableCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schem
 	  materialized_view_dependency_catalogs(std::move(info.materialized_view_dependency_catalogs)),
 	  materialized_view_dependency_schemas(std::move(info.materialized_view_dependency_schemas)),
 	  materialized_view_dependency_tables(std::move(info.materialized_view_dependency_tables)),
-	  materialized_view_dependency_generations(std::move(info.materialized_view_dependency_generations)) {
+	  materialized_view_dependency_generations(std::move(info.materialized_view_dependency_generations)),
+	  materialized_view_dependency_append_generations(
+	      std::move(info.materialized_view_dependency_append_generations)),
+	  materialized_view_dependency_delete_generations(
+	      std::move(info.materialized_view_dependency_delete_generations)),
+	  materialized_view_dependency_update_generations(
+	      std::move(info.materialized_view_dependency_update_generations)),
+	  materialized_view_dependency_row_counts(std::move(info.materialized_view_dependency_row_counts)),
+	  materialized_view_refresh_mode(std::move(info.materialized_view_refresh_mode)) {
 	this->temporary = info.temporary;
 	this->dependencies = info.dependencies;
 	this->comment = info.comment;
@@ -113,6 +121,11 @@ unique_ptr<CreateInfo> TableCatalogEntry::GetInfo() const {
 	result->materialized_view_dependency_schemas = materialized_view_dependency_schemas;
 	result->materialized_view_dependency_tables = materialized_view_dependency_tables;
 	result->materialized_view_dependency_generations = materialized_view_dependency_generations;
+	result->materialized_view_dependency_append_generations = materialized_view_dependency_append_generations;
+	result->materialized_view_dependency_delete_generations = materialized_view_dependency_delete_generations;
+	result->materialized_view_dependency_update_generations = materialized_view_dependency_update_generations;
+	result->materialized_view_dependency_row_counts = materialized_view_dependency_row_counts;
+	result->materialized_view_refresh_mode = materialized_view_refresh_mode;
 	return std::move(result);
 }
 

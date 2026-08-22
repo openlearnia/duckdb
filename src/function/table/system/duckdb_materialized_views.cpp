@@ -18,10 +18,10 @@ static unique_ptr<FunctionData> DuckDBMaterializedViewsBind(ClientContext &conte
                                                             vector<LogicalType> &return_types,
                                                             vector<string> &names) {
 	names = {"database_name", "schema_name", "view_name", "definition", "dependencies", "dependency_generations",
-	         "current_dependency_generations", "is_stale"};
+	         "current_dependency_generations", "last_refresh_mode", "is_stale"};
 	return_types = {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR,
 	                LogicalType::LIST(LogicalType::VARCHAR), LogicalType::LIST(LogicalType::BIGINT),
-	                LogicalType::LIST(LogicalType::BIGINT), LogicalType::BOOLEAN};
+	                LogicalType::LIST(LogicalType::BIGINT), LogicalType::VARCHAR, LogicalType::BOOLEAN};
 	return nullptr;
 }
 
@@ -77,6 +77,7 @@ static void DuckDBMaterializedViewsFunction(ClientContext &context, TableFunctio
 		output.SetValue(col++, count, Value::LIST(LogicalType::VARCHAR, std::move(dependencies)));
 		output.SetValue(col++, count, Value::LIST(LogicalType::BIGINT, std::move(dependency_generations)));
 		output.SetValue(col++, count, Value::LIST(LogicalType::BIGINT, std::move(current_dependency_generations)));
+		output.SetValue(col++, count, table.GetMaterializedViewRefreshMode());
 		output.SetValue(col++, count, table.MaterializedViewIsStale(context));
 		count++;
 	}

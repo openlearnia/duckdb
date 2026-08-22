@@ -22,6 +22,8 @@ class DuckTableEntry;
 class RowGroupCollection;
 class RowVersionManager;
 class DuckTransactionManager;
+
+enum class TableModificationType : uint8_t { APPEND = 1, DELETE = 2, UPDATE = 4, ALL = 7 };
 class StorageLockKey;
 class StorageCommitState;
 struct DataTableInfo;
@@ -98,8 +100,9 @@ public:
 	shared_ptr<CheckpointLock> SharedLockTable(DataTableInfo &info);
 
 	//! Hold an owning reference of the table, needed to safely reference it inside the transaction commit/undo logic
-	void ModifyTable(DataTable &tbl);
+	void ModifyTable(DataTable &tbl, TableModificationType type = TableModificationType::ALL);
 	bool HasModifiedTable(DataTable &tbl);
+	uint8_t GetTableModificationType(DataTable &tbl);
 
 private:
 	//! The undo buffer is used to store old versions of rows that are updated
@@ -119,6 +122,7 @@ private:
 	mutex modified_tables_lock;
 	//! Tables that are modified by this transaction
 	reference_map_t<DataTable, shared_ptr<DataTable>> modified_tables;
+	reference_map_t<DataTable, uint8_t> modified_table_types;
 	//! Lock for the active_locks map
 	mutex active_locks_lock;
 	struct ActiveTableLock {

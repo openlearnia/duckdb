@@ -24,6 +24,7 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/common/type_visitor.hpp"
 
 namespace duckdb {
@@ -83,6 +84,10 @@ static void CaptureMaterializedViewDependencies(ClientContext &context, LogicalO
 		auto &get = op.Cast<LogicalGet>();
 		auto table = get.GetTable();
 		if (table && table->IsDuckTable()) {
+			if (StringUtil::CIEquals(table->ParentCatalog().GetName(), base.catalog) &&
+			    StringUtil::CIEquals(table->schema.name, base.schema) && StringUtil::CIEquals(table->name, base.table)) {
+				return;
+			}
 			bool already_captured = false;
 			for (idx_t i = 0; i < base.materialized_view_dependency_tables.size(); i++) {
 				if (base.materialized_view_dependency_catalogs[i] == table->ParentCatalog().GetName() &&
@@ -96,14 +101,32 @@ static void CaptureMaterializedViewDependencies(ClientContext &context, LogicalO
 				base.dependencies.AddDependency(*table);
 				auto &storage = table->GetStorage();
 				auto generation = storage.GetModificationGeneration();
+				auto append_generation = storage.GetAppendGeneration();
+				auto delete_generation = storage.GetDeleteGeneration();
+				auto update_generation = storage.GetUpdateGeneration();
 				auto &transaction = DuckTransaction::Get(context, table->ParentCatalog());
-				if (transaction.HasModifiedTable(storage)) {
+				auto modification_type = transaction.GetTableModificationType(storage);
+				if (modification_type != 0) {
 					generation++;
+				}
+				if (modification_type & static_cast<uint8_t>(TableModificationType::APPEND)) {
+					append_generation++;
+				}
+				if (modification_type & static_cast<uint8_t>(TableModificationType::DELETE)) {
+					delete_generation++;
+				}
+				if (modification_type & static_cast<uint8_t>(TableModificationType::UPDATE)) {
+					update_generation++;
 				}
 				base.materialized_view_dependency_catalogs.push_back(table->ParentCatalog().GetName());
 				base.materialized_view_dependency_schemas.push_back(table->schema.name);
 				base.materialized_view_dependency_tables.push_back(table->name);
 				base.materialized_view_dependency_generations.push_back(generation);
+				base.materialized_view_dependency_append_generations.push_back(append_generation);
+				base.materialized_view_dependency_delete_generations.push_back(delete_generation);
+				base.materialized_view_dependency_update_generations.push_back(update_generation);
+				base.materialized_view_dependency_row_counts.push_back(
+				    storage.GetAppendedRows() + transaction.GetLocalStorage().AddedRows(storage));
 			}
 		}
 	}

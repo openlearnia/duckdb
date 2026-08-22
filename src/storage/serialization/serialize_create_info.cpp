@@ -181,6 +181,16 @@ void CreateTableInfo::Serialize(Serializer &serializer) const {
 	                                                   materialized_view_dependency_tables);
 	serializer.WritePropertyWithDefault<vector<idx_t>>(212, "materialized_view_dependency_generations",
 	                                                  materialized_view_dependency_generations);
+	serializer.WritePropertyWithDefault<vector<idx_t>>(213, "materialized_view_dependency_append_generations",
+	                                                  materialized_view_dependency_append_generations);
+	serializer.WritePropertyWithDefault<vector<idx_t>>(214, "materialized_view_dependency_delete_generations",
+	                                                  materialized_view_dependency_delete_generations);
+	serializer.WritePropertyWithDefault<vector<idx_t>>(215, "materialized_view_dependency_update_generations",
+	                                                  materialized_view_dependency_update_generations);
+	serializer.WritePropertyWithDefault<vector<idx_t>>(216, "materialized_view_dependency_row_counts",
+	                                                  materialized_view_dependency_row_counts);
+	serializer.WritePropertyWithDefault<string>(217, "materialized_view_refresh_mode", materialized_view_refresh_mode,
+	                                           "full");
 }
 
 unique_ptr<CreateInfo> CreateTableInfo::Deserialize(Deserializer &deserializer) {
@@ -202,6 +212,16 @@ unique_ptr<CreateInfo> CreateTableInfo::Deserialize(Deserializer &deserializer) 
 	                                                    result->materialized_view_dependency_tables);
 	deserializer.ReadPropertyWithDefault<vector<idx_t>>(212, "materialized_view_dependency_generations",
 	                                                   result->materialized_view_dependency_generations);
+	deserializer.ReadPropertyWithDefault<vector<idx_t>>(213, "materialized_view_dependency_append_generations",
+	                                                   result->materialized_view_dependency_append_generations);
+	deserializer.ReadPropertyWithDefault<vector<idx_t>>(214, "materialized_view_dependency_delete_generations",
+	                                                   result->materialized_view_dependency_delete_generations);
+	deserializer.ReadPropertyWithDefault<vector<idx_t>>(215, "materialized_view_dependency_update_generations",
+	                                                   result->materialized_view_dependency_update_generations);
+	deserializer.ReadPropertyWithDefault<vector<idx_t>>(216, "materialized_view_dependency_row_counts",
+	                                                   result->materialized_view_dependency_row_counts);
+	deserializer.ReadPropertyWithDefault<string>(217, "materialized_view_refresh_mode",
+	                                           result->materialized_view_refresh_mode);
 	return std::move(result);
 }
 

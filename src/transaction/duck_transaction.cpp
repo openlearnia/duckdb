@@ -90,7 +90,7 @@ void DuckTransaction::PushAttach(AttachedDatabase &db) {
 
 void DuckTransaction::PushDelete(DataTable &table, RowVersionManager &info, idx_t vector_idx, row_t rows[], idx_t count,
                                  idx_t base_row) {
-	ModifyTable(table);
+	ModifyTable(table, TableModificationType::DELETE);
 	bool is_consecutive = true;
 	// check if the rows are consecutive
 	for (idx_t i = 0; i < count; i++) {
@@ -123,7 +123,7 @@ void DuckTransaction::PushDelete(DataTable &table, RowVersionManager &info, idx_
 }
 
 void DuckTransaction::PushAppend(DataTable &table, idx_t start_row, idx_t row_count) {
-	ModifyTable(table);
+	ModifyTable(table, TableModificationType::APPEND);
 	auto undo_entry = undo_buffer.CreateEntry(UndoFlags::INSERT_TUPLE, sizeof(AppendInfo));
 	auto append_info = reinterpret_cast<AppendInfo *>(undo_entry.Ptr());
 	append_info->table = &table;
@@ -158,25 +158,38 @@ void DuckTransaction::PushSequenceUsage(SequenceCatalogEntry &sequence, const Se
 	}
 }
 
-void DuckTransaction::ModifyTable(DataTable &tbl) {
+void DuckTransaction::ModifyTable(DataTable &tbl, TableModificationType type) {
 	lock_guard<mutex> guard(modified_tables_lock);
 	auto table_ref = reference<DataTable>(tbl);
 	auto entry = modified_tables.find(table_ref);
-	if (entry != modified_tables.end()) {
-		// already exists
-		return;
+	if (entry == modified_tables.end()) {
+		modified_tables.insert(make_pair(table_ref, tbl.shared_from_this()));
 	}
-	modified_tables.insert(make_pair(table_ref, tbl.shared_from_this()));
+	auto type_entry = modified_table_types.find(table_ref);
+	if (type_entry == modified_table_types.end()) {
+		modified_table_types.insert(make_pair(table_ref, static_cast<uint8_t>(type)));
+	} else {
+		type_entry->second |= static_cast<uint8_t>(type);
+	}
 }
 
 bool DuckTransaction::HasModifiedTable(DataTable &tbl) {
+	return GetTableModificationType(tbl) != 0;
+}
+
+uint8_t DuckTransaction::GetTableModificationType(DataTable &tbl) {
+	uint8_t result = 0;
 	{
 		lock_guard<mutex> guard(modified_tables_lock);
-		if (modified_tables.find(reference<DataTable>(tbl)) != modified_tables.end()) {
-			return true;
+		auto entry = modified_table_types.find(reference<DataTable>(tbl));
+		if (entry != modified_table_types.end()) {
+			result = entry->second;
 		}
 	}
-	return storage->Find(tbl);
+	if (storage->Find(tbl)) {
+		result |= static_cast<uint8_t>(TableModificationType::APPEND);
+	}
+	return result;
 }
 
 bool DuckTransaction::ChangesMade() {
@@ -291,7 +304,11 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, CommitInfo &commit_info,
 		}
 		drop_state.FinalizeCommit();
 		for (auto &modified_table : modified_tables) {
-			modified_table.first.get().CommitModification();
+			auto type_entry = modified_table_types.find(modified_table.first);
+			auto modification_type = type_entry == modified_table_types.end()
+			                             ? static_cast<uint8_t>(TableModificationType::ALL)
+			                             : type_entry->second;
+			modified_table.first.get().CommitModification(modification_type);
 		}
 		return ErrorData();
 	} catch (std::exception &ex) {

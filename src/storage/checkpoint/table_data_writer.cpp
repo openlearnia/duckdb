@@ -206,6 +206,10 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	    [&](Serializer::List &list, idx_t i) { list.WriteElement(index_storage_infos.ordered_infos[i].get()); });
 	serializer.WritePropertyWithDefault<idx_t>(105, "modification_generation",
 	                                          table.GetStorage().GetModificationGeneration());
+	serializer.WritePropertyWithDefault<idx_t>(106, "append_generation", table.GetStorage().GetAppendGeneration());
+	serializer.WritePropertyWithDefault<idx_t>(107, "delete_generation", table.GetStorage().GetDeleteGeneration());
+	serializer.WritePropertyWithDefault<idx_t>(108, "update_generation", table.GetStorage().GetUpdateGeneration());
+	serializer.WritePropertyWithDefault<idx_t>(109, "appended_rows", table.GetStorage().GetAppendedRows());
 }
 
 } // namespace duckdb

@@ -635,6 +635,10 @@ void CheckpointReader::ReadTableData(CatalogTransaction transaction, Deserialize
 	    deserializer.ReadPropertyWithExplicitDefault<vector<IndexStorageInfo>>(104, "index_storage_infos", {});
 	auto modification_generation =
 	    deserializer.ReadPropertyWithExplicitDefault<idx_t>(105, "modification_generation", 0);
+	auto append_generation = deserializer.ReadPropertyWithExplicitDefault<idx_t>(106, "append_generation", 0);
+	auto delete_generation = deserializer.ReadPropertyWithExplicitDefault<idx_t>(107, "delete_generation", 0);
+	auto update_generation = deserializer.ReadPropertyWithExplicitDefault<idx_t>(108, "update_generation", 0);
+	auto appended_rows = deserializer.ReadPropertyWithExplicitDefault<idx_t>(109, "appended_rows", 0);
 
 	if (!index_storage_infos.empty()) {
 		bound_info.indexes = std::move(index_storage_infos);
@@ -660,6 +664,10 @@ void CheckpointReader::ReadTableData(CatalogTransaction transaction, Deserialize
 
 	bound_info.data->total_rows = total_rows;
 	bound_info.data->modification_generation = modification_generation;
+	bound_info.data->append_generation = append_generation;
+	bound_info.data->delete_generation = delete_generation;
+	bound_info.data->update_generation = update_generation;
+	bound_info.data->appended_rows = appended_rows;
 	bound_info.data->read_metadata_pointers = read_pointers;
 }
 

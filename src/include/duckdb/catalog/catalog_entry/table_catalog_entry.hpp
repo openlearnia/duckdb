@@ -83,6 +83,21 @@ public:
 	DUCKDB_API const vector<idx_t> &GetMaterializedViewDependencyGenerations() const {
 		return materialized_view_dependency_generations;
 	}
+	DUCKDB_API const vector<idx_t> &GetMaterializedViewDependencyAppendGenerations() const {
+		return materialized_view_dependency_append_generations;
+	}
+	DUCKDB_API const vector<idx_t> &GetMaterializedViewDependencyDeleteGenerations() const {
+		return materialized_view_dependency_delete_generations;
+	}
+	DUCKDB_API const vector<idx_t> &GetMaterializedViewDependencyUpdateGenerations() const {
+		return materialized_view_dependency_update_generations;
+	}
+	DUCKDB_API const vector<idx_t> &GetMaterializedViewDependencyRowCounts() const {
+		return materialized_view_dependency_row_counts;
+	}
+	DUCKDB_API const string &GetMaterializedViewRefreshMode() const {
+		return materialized_view_refresh_mode;
+	}
 	DUCKDB_API bool MaterializedViewIsStale(ClientContext &context);
 
 	DUCKDB_API bool HasGeneratedColumns() const;
@@ -159,6 +174,11 @@ protected:
 	vector<string> materialized_view_dependency_schemas;
 	vector<string> materialized_view_dependency_tables;
 	vector<idx_t> materialized_view_dependency_generations;
+	vector<idx_t> materialized_view_dependency_append_generations;
+	vector<idx_t> materialized_view_dependency_delete_generations;
+	vector<idx_t> materialized_view_dependency_update_generations;
+	vector<idx_t> materialized_view_dependency_row_counts;
+	string materialized_view_refresh_mode;
 	//! A list of columns that are part of this table
 	ColumnList columns;
 	//! A list of constraints that are part of this table

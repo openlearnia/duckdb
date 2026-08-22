@@ -178,8 +178,12 @@ public:
 	//! Commit the append
 	void CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count);
 	//! Advance the table-change generation once for a committed modifying transaction
-	void CommitModification();
+	void CommitModification(uint8_t modification_type);
 	idx_t GetModificationGeneration() const;
+	idx_t GetAppendGeneration() const;
+	idx_t GetDeleteGeneration() const;
+	idx_t GetUpdateGeneration() const;
+	idx_t GetAppendedRows() const;
 	//! Write a segment of the table to the WAL
 	void WriteToLog(DuckTransaction &transaction, WriteAheadLog &log, idx_t row_start, idx_t count,
 	                optional_ptr<StorageCommitState> commit_state);
@@ -342,5 +346,10 @@ private:
 	atomic<DataTableVersion> version;
 	//! Monotonic generation used by native materialized-view freshness tracking
 	atomic<idx_t> modification_generation;
+	atomic<idx_t> append_generation;
+	atomic<idx_t> delete_generation;
+	atomic<idx_t> update_generation;
+	//! Cumulative committed appends. Unlike physical row ids this survives checkpoint compaction.
+	atomic<idx_t> appended_rows;
 };
 } // namespace duckdb

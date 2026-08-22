@@ -24,6 +24,7 @@ add_library_unity(
   statement_preprocessor.cpp
   logical_operator_deep_copy.cpp
   logical_operator_visitor.cpp
+	materialized_view_incremental.cpp
   table_filter.cpp
   table_filter_state.cpp)
 set(ALL_OBJECT_FILES

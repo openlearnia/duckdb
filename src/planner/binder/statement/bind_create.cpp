@@ -39,6 +39,7 @@
 #include "duckdb/planner/operator/logical_create_table.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/planner/materialized_view_incremental.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/storage/storage_extension.hpp"
@@ -545,9 +546,13 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			create_info.on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
 			create_info.materialized_view = true;
 			create_info.materialized_view_query = table.GetMaterializedViewQuery();
+			create_info.materialized_view_refresh_mode = "full";
 			create_info.materialized_view_refresh = false;
-			create_info.query =
-			    unique_ptr_cast<SQLStatement, SelectStatement>(std::move(parser.statements[0]));
+			create_info.query = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(parser.statements[0]));
+			if (!create_info.materialized_view_skip_refresh) {
+				TryBuildMaterializedViewIncrementalQuery(context, table, create_info.query,
+				                                         create_info.materialized_view_refresh_mode);
+			}
 		}
 		auto bound_info = BindCreateTableInfo(std::move(stmt.info));
 		auto root = std::move(bound_info->query);
