@@ -599,17 +599,12 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 	result.names = {"Count"};
 	result.types = {LogicalType::BIGINT};
 
-	node.qualified_name = BindTableName(node.qualified_name);
-	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, node.qualified_name);
-
-	if (auto expanded = TryExpandTriggers(node, table, TriggerEventType::INSERT_EVENT)) {
-		return std::move(*expanded);
+	BindSchemaOrCatalog(stmt.catalog, stmt.schema);
+	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, stmt.catalog, stmt.schema, stmt.table);
+	if (table.IsMaterializedView()) {
+		throw BinderException("Cannot insert into materialized view \"%s\"; use REFRESH MATERIALIZED VIEW", table.name);
 	}
-	if (auto expanded = TryExpandRowTriggers(node, node.returning_list, table, TriggerEventType::INSERT_EVENT)) {
-		return std::move(*expanded);
-	}
-
-	if (node.on_conflict_info) {
+	if (stmt.on_conflict_info) {
 		// generate a MERGE INTO statement and bind it instead
 		auto merge_into = GenerateMergeInto(node, table);
 		return Bind(*merge_into);

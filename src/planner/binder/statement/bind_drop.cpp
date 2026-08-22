@@ -3,6 +3,7 @@
 #include "duckdb/planner/operator/logical_drop.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/standard_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
@@ -93,6 +94,15 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 		}
 		if (!entry) {
 			break;
+		}
+		if (stmt.info->type == CatalogType::TABLE_ENTRY) {
+			auto &table = entry->Cast<TableCatalogEntry>();
+			if (stmt.info->materialized_view && !table.IsMaterializedView()) {
+				throw CatalogException("Table \"%s\" is not a materialized view", table.name);
+			}
+			if (!stmt.info->materialized_view && table.IsMaterializedView()) {
+				throw CatalogException("Materialized view \"%s\" must be dropped with DROP MATERIALIZED VIEW", table.name);
+			}
 		}
 		if (entry->internal) {
 			throw CatalogException("Cannot drop internal catalog entry %s!", entry->name);

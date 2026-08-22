@@ -285,6 +285,9 @@ unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(CatalogTransaction transacti
 
 unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(ClientContext &context, AlterInfo &info) {
 	D_ASSERT(!internal);
+	if (IsMaterializedView()) {
+		throw CatalogException("Cannot alter materialized view \"%s\"; recreate it instead", name);
+	}
 
 	// Column comments have a special alter type
 	if (info.type == AlterType::SET_COLUMN_COMMENT) {

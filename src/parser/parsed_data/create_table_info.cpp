@@ -37,7 +37,8 @@ unique_ptr<CreateInfo> CreateTableInfo::Copy() const {
 	}
 	result->materialized_view = materialized_view;
 	result->materialized_view_query = materialized_view_query;
-	result->catalog_materialized_view = catalog_materialized_view;
+	result->materialized_view_refresh = materialized_view_refresh;
+	result->materialized_view_if_stale = materialized_view_if_stale;
 	return std::move(result);
 }
 
