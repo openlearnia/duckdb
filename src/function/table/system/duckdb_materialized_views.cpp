@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database_manager.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 
@@ -32,20 +33,24 @@ static unique_ptr<FunctionData> DuckDBMaterializedViewsBind(ClientContext &, Tab
 }
 
 static unique_ptr<GlobalTableFunctionState> DuckDBMaterializedViewsInit(ClientContext &context,
-	                                                                       TableFunctionInitInput &) {
+                                                                       TableFunctionInitInput &) {
 	auto result = make_uniq<DuckDBMaterializedViewsData>();
-	for (auto &schema : Catalog::GetAllSchemas(context)) {
-		schema.get().Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
-			// This function describes native DuckDB materialized views. DuckLake
-			// exposes its managed views through ducklake_materialized_views();
-			// mixing the two catalog implementations here leaves DuckLake entries
-			// with native MV metadata assumptions and can crash after an attached
-			// DuckLake test detaches its catalog.
-			if (schema.get().catalog.GetCatalogType() == "duckdb" &&
-			    entry.Cast<TableCatalogEntry>().IsMaterializedView()) {
-				result->entries.push_back(entry);
-			}
-		});
+	// Do not call Catalog::GetAllSchemas here: it materializes schemas from
+	// every visible catalog, including DuckLake's managed catalogs. Native MV
+	// introspection only needs DuckDB catalogs and should not retain or scan
+	// DuckLake schema entries.
+	for (auto &database : DatabaseManager::Get(context).GetDatabases(context)) {
+		if (database->GetVisibility() == AttachVisibility::HIDDEN ||
+		    database->GetCatalog().GetCatalogType() != "duckdb") {
+			continue;
+		}
+		for (auto &schema : database->GetCatalog().GetSchemas(context)) {
+			schema.get().Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
+				if (entry.Cast<TableCatalogEntry>().IsMaterializedView()) {
+					result->entries.push_back(entry);
+				}
+			});
+		}
 	}
 	return std::move(result);
 }
