@@ -67,6 +67,11 @@ public:
 	DUCKDB_API bool IsMaterializedView() const {
 		return materialized_view;
 	}
+	//! True when catalog discovery should expose this relation as a materialized view.
+	//! This is separate from IsMaterializedView() for extension-managed MVs.
+	DUCKDB_API bool IsMaterializedViewForCatalog() const {
+		return materialized_view || catalog_materialized_view;
+	}
 
 	DUCKDB_API const string &GetMaterializedViewQuery() const {
 		return materialized_view_query;
@@ -169,6 +174,7 @@ public:
 protected:
 	//! Native MV marker and persisted defining query
 	bool materialized_view;
+	bool catalog_materialized_view;
 	string materialized_view_query;
 	vector<string> materialized_view_dependency_catalogs;
 	vector<string> materialized_view_dependency_schemas;

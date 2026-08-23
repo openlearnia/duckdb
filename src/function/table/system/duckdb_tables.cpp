@@ -157,7 +157,7 @@ void DuckDBTablesFunction(ClientContext &context, TableFunctionInput &data_p, Da
 		table_info->catalog.clear();
 		output.SetValue(col++, count, Value(table_info->ToString()));
 		// is_materialized, BOOLEAN
-		output.SetValue(col++, count, Value::BOOLEAN(table.IsMaterializedView()));
+		output.SetValue(col++, count, Value::BOOLEAN(table.IsMaterializedViewForCatalog()));
 		count++;
 	}
 	output.SetCardinality(count);

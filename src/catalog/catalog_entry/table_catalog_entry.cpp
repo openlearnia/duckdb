@@ -27,6 +27,7 @@ constexpr const char *TableCatalogEntry::Name;
 TableCatalogEntry::TableCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info)
     : StandardEntry(CatalogType::TABLE_ENTRY, schema, catalog, info.table), columns(std::move(info.columns)),
 	  constraints(std::move(info.constraints)), materialized_view(info.materialized_view),
+	  catalog_materialized_view(info.catalog_materialized_view),
 	  materialized_view_query(std::move(info.materialized_view_query)),
 	  materialized_view_dependency_catalogs(std::move(info.materialized_view_dependency_catalogs)),
 	  materialized_view_dependency_schemas(std::move(info.materialized_view_dependency_schemas)),
@@ -116,6 +117,7 @@ unique_ptr<CreateInfo> TableCatalogEntry::GetInfo() const {
 	result->comment = comment;
 	result->tags = tags;
 	result->materialized_view = materialized_view;
+	result->catalog_materialized_view = catalog_materialized_view;
 	result->materialized_view_query = materialized_view_query;
 	result->materialized_view_dependency_catalogs = materialized_view_dependency_catalogs;
 	result->materialized_view_dependency_schemas = materialized_view_dependency_schemas;

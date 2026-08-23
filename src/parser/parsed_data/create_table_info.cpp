@@ -36,6 +36,7 @@ unique_ptr<CreateInfo> CreateTableInfo::Copy() const {
 		result->query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());
 	}
 	result->materialized_view = materialized_view;
+	result->catalog_materialized_view = catalog_materialized_view;
 	result->materialized_view_query = materialized_view_query;
 	result->materialized_view_dependency_catalogs = materialized_view_dependency_catalogs;
 	result->materialized_view_dependency_schemas = materialized_view_dependency_schemas;

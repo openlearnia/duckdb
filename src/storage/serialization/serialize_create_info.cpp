@@ -172,6 +172,7 @@ void CreateTableInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(205, "sort_keys", sort_keys);
 	serializer.WritePropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(206, "options", options);
 	serializer.WritePropertyWithDefault<bool>(207, "materialized_view", materialized_view);
+	serializer.WritePropertyWithDefault<bool>(218, "catalog_materialized_view", catalog_materialized_view);
 	serializer.WritePropertyWithDefault<string>(208, "materialized_view_query", materialized_view_query);
 	serializer.WritePropertyWithDefault<vector<string>>(209, "materialized_view_dependency_catalogs",
 	                                                   materialized_view_dependency_catalogs);
@@ -203,6 +204,7 @@ unique_ptr<CreateInfo> CreateTableInfo::Deserialize(Deserializer &deserializer) 
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(205, "sort_keys", result->sort_keys);
 	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(206, "options", result->options);
 	deserializer.ReadPropertyWithDefault<bool>(207, "materialized_view", result->materialized_view);
+	deserializer.ReadPropertyWithDefault<bool>(218, "catalog_materialized_view", result->catalog_materialized_view);
 	deserializer.ReadPropertyWithDefault<string>(208, "materialized_view_query", result->materialized_view_query);
 	deserializer.ReadPropertyWithDefault<vector<string>>(209, "materialized_view_dependency_catalogs",
 	                                                    result->materialized_view_dependency_catalogs);

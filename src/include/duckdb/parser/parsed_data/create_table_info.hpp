@@ -37,6 +37,9 @@ struct CreateTableInfo : public CreateInfo {
 	case_insensitive_map_t<unique_ptr<ParsedExpression>> options;
 	//! Whether this physical table is a native materialized view
 	bool materialized_view = false;
+	//! Whether catalog discovery should classify this relation as a materialized view
+	//! without enabling native materialized-view semantics.
+	bool catalog_materialized_view = false;
 	//! Canonical defining SELECT for a native materialized view
 	string materialized_view_query;
 	//! Stable dependency identities and their table-change generations at the last refresh
