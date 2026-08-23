@@ -24,9 +24,10 @@ static unique_ptr<FunctionData> DuckDBMaterializedViewsBind(ClientContext &, Tab
 	names.emplace_back("dependency_generations");
 	names.emplace_back("current_dependency_generations");
 	names.emplace_back("is_stale");
+	names.emplace_back("last_refresh_mode");
 	return_types = {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR,
 	                LogicalType::LIST(LogicalType::VARCHAR), LogicalType::LIST(LogicalType::BIGINT),
-	                LogicalType::LIST(LogicalType::BIGINT), LogicalType::BOOLEAN};
+	                LogicalType::LIST(LogicalType::BIGINT), LogicalType::BOOLEAN, LogicalType::VARCHAR};
 	return nullptr;
 }
 
@@ -83,6 +84,7 @@ static void DuckDBMaterializedViewsFunction(ClientContext &context, TableFunctio
 		output.data[col++].Append(Value::LIST(LogicalType::BIGINT, std::move(dependency_generations)));
 		output.data[col++].Append(Value::LIST(LogicalType::BIGINT, std::move(current_dependency_generations)));
 		output.data[col++].Append(Value::BOOLEAN(table.MaterializedViewIsStale(context)));
+		output.data[col++].Append(Value(table.GetMaterializedViewRefreshMode()));
 		count++;
 	}
 	output.SetCardinality(count);

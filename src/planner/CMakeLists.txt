@@ -29,7 +29,8 @@ add_library_unity(
   logical_operator_deep_copy.cpp
   logical_operator_visitor.cpp
   table_filter_set.cpp
-  table_filter_state.cpp)
+  table_filter_state.cpp
+  materialized_view_incremental.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_planner>
     PARENT_SCOPE)

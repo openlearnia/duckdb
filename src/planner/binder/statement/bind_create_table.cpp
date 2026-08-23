@@ -87,6 +87,14 @@ static void CaptureMaterializedViewDependencies(ClientContext &context, LogicalO
 		auto &get = op.Cast<LogicalGet>();
 		auto table = get.GetTable();
 		if (table && table->IsDuckTable()) {
+			auto view_name = base.GetQualifiedName();
+			if (!view_name.Catalog().empty() &&
+			    StringUtil::CIEquals(view_name.Catalog().GetIdentifierName(),
+			                        table->ParentCatalog().GetName().GetIdentifierName()) &&
+			    StringUtil::CIEquals(view_name.Schema().GetIdentifierName(), table->schema.name.GetIdentifierName()) &&
+			    StringUtil::CIEquals(view_name.Name().GetIdentifierName(), table->name.GetIdentifierName())) {
+				return;
+			}
 			bool already_captured = false;
 			for (idx_t i = 0; i < base.materialized_view_dependency_tables.size(); i++) {
 				if (base.materialized_view_dependency_catalogs[i] == table->ParentCatalog().GetName() &&
