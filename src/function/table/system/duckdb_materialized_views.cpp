@@ -36,7 +36,12 @@ static unique_ptr<GlobalTableFunctionState> DuckDBMaterializedViewsInit(ClientCo
 	auto result = make_uniq<DuckDBMaterializedViewsData>();
 	for (auto &schema : Catalog::GetAllSchemas(context)) {
 		schema.get().Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
-			if (entry.Cast<TableCatalogEntry>().IsMaterializedView()) {
+			// This function describes native DuckDB materialized views. DuckLake
+			// exposes its managed views through ducklake_materialized_views();
+			// mixing the two catalog implementations here leaves DuckLake entries
+			// with native MV metadata assumptions and can crash after an attached
+			// DuckLake test detaches its catalog.
+			if (entry.catalog.GetCatalogType() == "duckdb" && entry.Cast<TableCatalogEntry>().IsMaterializedView()) {
 				result->entries.push_back(entry);
 			}
 		});
