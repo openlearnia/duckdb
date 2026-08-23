@@ -41,7 +41,8 @@ static unique_ptr<GlobalTableFunctionState> DuckDBMaterializedViewsInit(ClientCo
 			// mixing the two catalog implementations here leaves DuckLake entries
 			// with native MV metadata assumptions and can crash after an attached
 			// DuckLake test detaches its catalog.
-			if (entry.catalog.GetCatalogType() == "duckdb" && entry.Cast<TableCatalogEntry>().IsMaterializedView()) {
+			if (schema.get().catalog.GetCatalogType() == "duckdb" &&
+			    entry.Cast<TableCatalogEntry>().IsMaterializedView()) {
 				result->entries.push_back(entry);
 			}
 		});
