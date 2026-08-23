@@ -35,22 +35,21 @@ static unique_ptr<FunctionData> DuckDBMaterializedViewsBind(ClientContext &, Tab
 static unique_ptr<GlobalTableFunctionState> DuckDBMaterializedViewsInit(ClientContext &context,
                                                                        TableFunctionInitInput &) {
 	auto result = make_uniq<DuckDBMaterializedViewsData>();
-	// Do not call Catalog::GetAllSchemas here: it materializes schemas from
-	// every visible catalog, including DuckLake's managed catalogs. Native MV
-	// introspection only needs DuckDB catalogs and should not retain or scan
-	// DuckLake schema entries.
-	for (auto &database : DatabaseManager::Get(context).GetDatabases(context)) {
-		if (database->GetVisibility() == AttachVisibility::HIDDEN ||
-		    database->GetCatalog().GetCatalogType() != "duckdb") {
-			continue;
-		}
-		for (auto &schema : database->GetCatalog().GetSchemas(context)) {
-			schema.get().Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
-				if (entry.Cast<TableCatalogEntry>().IsMaterializedView()) {
-					result->entries.push_back(entry);
-				}
-			});
-		}
+	// Do not walk every attached database here: that materializes all visible
+	// DuckLake schemas and can exhaust memory after a long mixed-catalog session.
+	// Native introspection is scoped to the current default DuckDB catalog;
+	// DuckLake exposes its managed views through ducklake_materialized_views().
+	auto default_database_name = DatabaseManager::GetDefaultDatabase(context);
+	auto default_database = DatabaseManager::Get(context).GetDatabase(default_database_name);
+	if (!default_database || default_database->GetCatalog().GetCatalogType() != "duckdb") {
+		return std::move(result);
+	}
+	for (auto &schema : default_database->GetCatalog().GetSchemas(context)) {
+		schema.get().Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
+			if (entry.Cast<TableCatalogEntry>().IsMaterializedView()) {
+				result->entries.push_back(entry);
+			}
+		});
 	}
 	return std::move(result);
 }
