@@ -47,9 +47,6 @@ struct CreateTableInfo : public CreateInfo {
 	string materialized_view_query;
 	//! Whether this table represents a materialized view owned by an extension catalog.
 	bool catalog_materialized_view = false;
-	//! Transient flags used to bind REFRESH MATERIALIZED VIEW through the CTAS path
-	bool materialized_view_refresh = false;
-	bool materialized_view_if_stale = false;
 
 public:
 	DUCKDB_API unique_ptr<CreateInfo> Copy() const override;

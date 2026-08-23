@@ -171,9 +171,6 @@ BoundStatement Binder::BindNode(UpdateQueryNode &node) {
 		throw BinderException("Can only update base table");
 	}
 	auto &table = *table_ptr;
-	if (table.IsMaterializedView()) {
-		throw BinderException("Cannot update materialized view \"%s\"; use REFRESH MATERIALIZED VIEW", table.name);
-	}
 
 	if (auto expanded = TryExpandTriggers(node, table, TriggerEventType::UPDATE_EVENT)) {
 		return std::move(*expanded);
