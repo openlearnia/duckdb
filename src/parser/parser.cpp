@@ -252,7 +252,8 @@ void Parser::ParseQuery(const string &query_p) {
 			if (!ext.parser_override) {
 				continue;
 			}
-			if (options.parser_override_setting == AllowParserOverride::DEFAULT_OVERRIDE) {
+			if (options.parser_override_setting == AllowParserOverride::DEFAULT_OVERRIDE &&
+			    !ext.parser_override_default) {
 				continue;
 			}
 			auto result = ext.parser_override(ext.parser_info.get(), query, options);
@@ -260,7 +261,12 @@ void Parser::ParseQuery(const string &query_p) {
 				statements = std::move(result.statements);
 				return;
 			}
-			if (options.parser_override_setting == AllowParserOverride::STRICT_OVERRIDE) {
+			if (options.parser_override_setting == AllowParserOverride::DEFAULT_OVERRIDE) {
+				if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
+					result.error.Throw();
+				}
+				continue;
+			} else if (options.parser_override_setting == AllowParserOverride::STRICT_OVERRIDE) {
 				if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
 					has_strict_extension_error = true;
 					last_strict_extension_error = std::move(result.error);

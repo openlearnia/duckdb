@@ -52,7 +52,8 @@ bool ParseIterator::Peek() {
 				if (!ext.parser_override) {
 					continue;
 				}
-				if (options.parser_override_setting == AllowParserOverride::DEFAULT_OVERRIDE) {
+				if (options.parser_override_setting == AllowParserOverride::DEFAULT_OVERRIDE &&
+				    !ext.parser_override_default) {
 					continue;
 				}
 				auto result = ext.parser_override(ext.parser_info.get(), sql, options);
@@ -60,7 +61,12 @@ bool ParseIterator::Peek() {
 					overridden_statements = make_uniq<vector<unique_ptr<SQLStatement>>>(std::move(result.statements));
 					break;
 				}
-				if (options.parser_override_setting == AllowParserOverride::STRICT_OVERRIDE) {
+				if (options.parser_override_setting == AllowParserOverride::DEFAULT_OVERRIDE) {
+					if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
+						result.error.Throw();
+					}
+					continue;
+				} else if (options.parser_override_setting == AllowParserOverride::STRICT_OVERRIDE) {
 					if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
 						has_strict_extension_error = true;
 						last_strict_extension_error = std::move(result.error);
