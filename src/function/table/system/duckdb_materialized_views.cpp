@@ -67,7 +67,12 @@ static void DuckDBMaterializedViewsFunction(ClientContext &context, TableFunctio
 		const auto &schemas = table.GetMaterializedViewDependencySchemas();
 		const auto &tables = table.GetMaterializedViewDependencyTables();
 		const auto &generations = table.GetMaterializedViewDependencyGenerations();
-		for (idx_t i = 0; i < tables.size(); i++) {
+		// A partially restored catalog can contain mismatched dependency vectors.
+		// MaterializedViewIsStale treats that state as stale; keep introspection
+		// safe as well and only walk the entries that have a complete identity.
+		const auto dependency_count = MinValue(MinValue(catalogs.size(), schemas.size()),
+		                                      MinValue(tables.size(), generations.size()));
+		for (idx_t i = 0; i < dependency_count; i++) {
 			dependencies.push_back(Value(catalogs[i] + "." + schemas[i] + "." + tables[i]));
 			dependency_generations.push_back(Value::BIGINT(NumericCast<int64_t>(generations[i])));
 			EntryLookupInfo lookup(CatalogType::TABLE_ENTRY,
