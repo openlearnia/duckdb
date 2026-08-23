@@ -169,7 +169,7 @@ static const DefaultView internal_views[] = {
 	     "SELECT database_name table_catalog, schema_name table_schema, table_name, CASE WHEN is_materialized THEN 'MATERIALIZED VIEW' WHEN temporary THEN 'LOCAL "
 	     "TEMPORARY' ELSE 'BASE TABLE' END table_type, NULL::VARCHAR self_referencing_column_name, NULL::VARCHAR "
      "reference_generation, NULL::VARCHAR user_defined_type_catalog, NULL::VARCHAR user_defined_type_schema, "
-     "NULL::VARCHAR user_defined_type_name, 'YES' is_insertable_into, 'NO' is_typed, CASE WHEN temporary THEN "
+     "NULL::VARCHAR user_defined_type_name, CASE WHEN is_materialized THEN 'NO' ELSE 'YES' END is_insertable_into, 'NO' is_typed, CASE WHEN temporary THEN "
      "'PRESERVE' ELSE NULL END commit_action, comment AS TABLE_COMMENT FROM duckdb_tables() UNION ALL SELECT "
      "database_name table_catalog, schema_name table_schema, view_name table_name, 'VIEW' table_type, NULL "
      "self_referencing_column_name, NULL reference_generation, NULL user_defined_type_catalog, NULL "
