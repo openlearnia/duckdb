@@ -45,6 +45,8 @@ struct CreateTableInfo : public CreateInfo {
 	bool materialized_view = false;
 	//! Canonical defining SELECT for a native materialized view
 	string materialized_view_query;
+	//! Whether this table represents a materialized view owned by an extension catalog.
+	bool catalog_materialized_view = false;
 
 public:
 	DUCKDB_API unique_ptr<CreateInfo> Copy() const override;

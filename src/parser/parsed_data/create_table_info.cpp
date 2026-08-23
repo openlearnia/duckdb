@@ -32,12 +32,12 @@ unique_ptr<CreateInfo> CreateTableInfo::Copy() const {
 	for (auto &option : options) {
 		result->options.emplace(option.first, option.second->Copy());
 	}
-	result->catalog_materialized_view = catalog_materialized_view;
 	if (query) {
 		result->query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());
 	}
 	result->materialized_view = materialized_view;
 	result->materialized_view_query = materialized_view_query;
+	result->catalog_materialized_view = catalog_materialized_view;
 	return std::move(result);
 }
 
@@ -72,7 +72,7 @@ string CreateTableInfo::ExtraOptionsToString() const {
 
 string CreateTableInfo::ToString() const {
 	string ret = GetCreatePrefix(materialized_view ? "MATERIALIZED VIEW" : "TABLE");
-	ret += QualifierToString(temporary ? "" : catalog, schema, table);
+	ret += QualifiedNameToString();
 	if (materialized_view && query == nullptr && !materialized_view_query.empty()) {
 		return ret + " AS " + materialized_view_query + ";";
 	}
