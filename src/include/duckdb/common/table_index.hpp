@@ -42,6 +42,13 @@ struct TableIndex {
 	bool IsValid() const {
 		return index != DConstants::INVALID_INDEX;
 	}
+	// DuckLake uses the high index range for transaction-local catalog IDs.
+	// Keep this compatibility predicate on the shared index type while DuckLake
+	// is being ported to the v2.0 preview catalog APIs.
+	bool IsTransactionLocal() const {
+		D_ASSERT(IsValid());
+		return index >= 9223372036854775808ULL;
+	}
 };
 
 } // namespace duckdb
