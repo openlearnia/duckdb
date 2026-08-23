@@ -601,6 +601,9 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 
 	node.qualified_name = BindTableName(node.qualified_name);
 	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, node.qualified_name);
+	if (table.IsMaterializedView()) {
+		throw BinderException("Cannot insert into materialized view \"%s\"", table.name);
+	}
 
 	if (auto expanded = TryExpandTriggers(node, table, TriggerEventType::INSERT_EVENT)) {
 		return std::move(*expanded);

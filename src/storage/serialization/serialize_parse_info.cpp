@@ -451,6 +451,7 @@ void DropInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<bool>(205, "cascade", cascade);
 	serializer.WritePropertyWithDefault<bool>(206, "allow_drop_internal", allow_drop_internal);
 	serializer.WritePropertyWithDefault<unique_ptr<ExtraDropInfo>>(207, "extra_drop_info", extra_drop_info);
+	serializer.WritePropertyWithDefault<bool>(208, "materialized_view", materialized_view);
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0) || (qualified_name.Path().size() > 3)) {
 		serializer.WriteProperty<QualifiedName>(208, "qualified_name", qualified_name);
 	}
@@ -466,6 +467,7 @@ unique_ptr<ParseInfo> DropInfo::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<bool>(205, "cascade", result->cascade);
 	deserializer.ReadPropertyWithDefault<bool>(206, "allow_drop_internal", result->allow_drop_internal);
 	deserializer.ReadPropertyWithDefault<unique_ptr<ExtraDropInfo>>(207, "extra_drop_info", result->extra_drop_info);
+	deserializer.ReadPropertyWithDefault<bool>(208, "materialized_view", result->materialized_view);
 	auto qualified_name = deserializer.ReadPropertyWithExplicitDefault<QualifiedName>(208, "qualified_name", QualifiedName());
 	result->SetQualifiedName(std::move(catalog), std::move(schema), std::move(name));
 	if (!qualified_name.Path().empty()) {

@@ -5,6 +5,7 @@ TopLevelStatement <- Statement? (';'+ / EndOfInput)
 Statement <-
 	ExternalResourceStatement /
 	CreateStatement /
+	RefreshStatement /
 	SelectStatement /
 	SetStatement /
 	PragmaStatement /
@@ -43,6 +44,9 @@ AnalyzeKeyword <- 'ANALYZE' / 'ANALYSE'
 
 ExpressionStatement <- List(ExpressionAlias)
 ExpressionAlias <- ColIdExpression / ExpressionAsCollabel / Expression
+
+RefreshStatement <- 'REFRESH' 'MATERIALIZED' 'VIEW' RefreshIfStale? QualifiedName
+RefreshIfStale <- 'IF' 'STALE'
 
 CatalogName <- Identifier
 SchemaName <- Identifier
@@ -955,7 +959,8 @@ MinValue <- 'MINVALUE'
 MaxValue <- 'MAXVALUE'
 
 CreateStatement <- 'CREATE' OrReplace? Temporary? CreateStatementVariation
-CreateStatementVariation <- CreateTableStmt / CreateMacroStmt / CreateSequenceStmt / CreateTypeStmt / CreateSchemaStmt / CreateViewStmt / CreateIndexStmt / CreateSecretStmt / CreateTriggerStmt
+CreateStatementVariation <- CreateMaterializedViewStmt / CreateTableStmt / CreateMacroStmt / CreateSequenceStmt / CreateTypeStmt / CreateSchemaStmt / CreateViewStmt / CreateIndexStmt / CreateSecretStmt / CreateTriggerStmt
+CreateMaterializedViewStmt <- 'MATERIALIZED' 'VIEW' IfNotExists? QualifiedName 'AS' Statement
 OrReplace <- 'OR' 'REPLACE'
 Temporary <- Persistent / TempPersistent / TemporaryPersistent
 Persistent <- 'PERSISTENT'

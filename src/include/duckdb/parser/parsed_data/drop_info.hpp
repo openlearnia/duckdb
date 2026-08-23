@@ -35,6 +35,8 @@ public:
 	bool cascade = false;
 	//! Allow dropping of internal system entries
 	bool allow_drop_internal = false;
+	//! DROP MATERIALIZED VIEW rather than DROP TABLE.
+	bool materialized_view = false;
 	//! Extra info related to this drop
 	unique_ptr<ExtraDropInfo> extra_drop_info;
 

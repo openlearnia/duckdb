@@ -24,14 +24,15 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropTable(PEGTransform
 	}
 	auto base_table = std::move(base_table_name[0]);
 	info->SetQualifiedName(base_table->GetQualifiedName());
-	info->type = table_or_view;
+	info->materialized_view = table_or_view == CatalogType::INVALID;
+	info->type = info->materialized_view ? CatalogType::TABLE_ENTRY : table_or_view;
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	result->info = std::move(info);
 	return result;
 }
 
 CatalogType PEGTransformerFactory::TransformMaterializedViewEntry(PEGTransformer &transformer) {
-	throw NotImplementedException("Cannot drop MATERIALIZED VIEW yet");
+	return CatalogType::INVALID;
 }
 
 bool PEGTransformerFactory::TransformFunctionTypeMacroKeyword(PEGTransformer &transformer) {

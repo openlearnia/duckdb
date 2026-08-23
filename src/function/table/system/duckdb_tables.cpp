@@ -172,7 +172,7 @@ void DuckDBTablesFunction(ClientContext &context, TableFunctionInput &data_p, Da
 		auto table_info = table.GetInfo();
 		table_info->StripCatalogQualification();
 		sql.Append(Value(table_info->ToString()));
-		output.SetValue(16, count, Value::BOOLEAN(table.IsMaterializedViewForCatalog()));
+		output.SetValue(16, count, Value::BOOLEAN(table.IsMaterializedView() || table.IsMaterializedViewForCatalog()));
 		count++;
 	}
 }

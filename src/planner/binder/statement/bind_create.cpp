@@ -21,12 +21,14 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
+#include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/parser/parsed_data/create_trigger_info.hpp"
 #include "duckdb/parser/parsed_data/create_secret_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
+#include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/common_table_expression_info.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
@@ -880,6 +882,27 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		break;
 	}
 	case CatalogType::TABLE_ENTRY: {
+		auto &create_info = stmt.info->Cast<CreateTableInfo>();
+		if (create_info.materialized_view_refresh) {
+			auto &qualified_name = create_info.GetQualifiedName();
+			EntryLookupInfo lookup(CatalogType::TABLE_ENTRY, qualified_name.Name());
+			auto entry = Catalog::GetEntry(context, qualified_name.Catalog(), qualified_name.Schema(), lookup,
+			                               OnEntryNotFound::THROW_EXCEPTION);
+			auto &table = entry->Cast<TableCatalogEntry>();
+			if (!table.IsMaterializedView()) {
+				throw CatalogException("Table \"%s\" is not a materialized view", table.name);
+			}
+			Parser parser;
+			parser.ParseQuery(table.GetMaterializedViewQuery());
+			if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
+				throw InternalException("Materialized view \"%s\" has an invalid stored definition", table.name);
+			}
+			create_info.on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
+			create_info.materialized_view = true;
+			create_info.materialized_view_query = table.GetMaterializedViewQuery();
+			create_info.materialized_view_refresh = false;
+			create_info.query = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(parser.statements[0]));
+		}
 		// Skip real catalog/schema resolution in EXTRACT_NAMES or EXTRACT_QUALIFIED_NAMES mode
 		if (GetBindingMode() == BindingMode::EXTRACT_NAMES ||
 		    GetBindingMode() == BindingMode::EXTRACT_QUALIFIED_NAMES) {

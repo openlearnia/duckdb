@@ -85,6 +85,7 @@ SQLStatement:
     - LoadStatement
     - InstallStatement
     - UpdateExtensionsStatement
+    - RefreshStatement
     - MergeIntoStatement
     - PragmaStatement
     - PragmaAssign
@@ -171,6 +172,7 @@ CreateStatement:
     - CreateSecretStmt
     - CreateSequenceStmt
     - CreateStatementVariation
+    - CreateMaterializedViewStmt
     - CreateTableStmt
     - CreateIndexStmt
     - CreateMacroStmt
@@ -1150,6 +1152,7 @@ Bool:
     - AnalyzeVerbose
     - CheckpointForce
     - IfNotExists
+    - RefreshIfStale
     - OrReplace
     - ShowAllModifier
     - FunctionTypeMacro

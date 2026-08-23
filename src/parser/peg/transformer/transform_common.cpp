@@ -3,6 +3,8 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
+#include "duckdb/parser/parsed_data/create_table_info.hpp"
+#include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/operator/negate.hpp"
@@ -10,6 +12,20 @@
 #include "duckdb/common/types/bignum.hpp"
 
 namespace duckdb {
+
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformRefreshStatement(
+    PEGTransformer &transformer, const optional<bool> &refresh_if_stale, const QualifiedName &qualified_name) {
+	auto result = make_uniq<CreateStatement>();
+	auto info = make_uniq<CreateTableInfo>(qualified_name);
+	info->materialized_view_refresh = true;
+	info->materialized_view_if_stale = refresh_if_stale.value_or(false);
+	result->info = std::move(info);
+	return result;
+}
+
+bool PEGTransformerFactory::TransformRefreshIfStale(PEGTransformer &transformer) {
+	return true;
+}
 
 Identifier PEGTransformerFactory::TransformAnalyzeKeyword(PEGTransformer &transformer) {
 	return Identifier("analyze");

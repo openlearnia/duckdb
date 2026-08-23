@@ -74,6 +74,22 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTableStmt(
 	return result;
 }
 
+unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateMaterializedViewStmt(
+    PEGTransformer &transformer, const optional<bool> &if_not_exists, const QualifiedName &qualified_name,
+    unique_ptr<SQLStatement> statement) {
+	if (!statement || statement->type != StatementType::SELECT_STATEMENT) {
+		throw ParserException("CREATE MATERIALIZED VIEW requires a SELECT statement");
+	}
+	auto result = make_uniq<CreateStatement>();
+	auto info = make_uniq<CreateTableInfo>(qualified_name);
+	info->on_conflict = if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
+	info->materialized_view = true;
+	info->query = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(statement));
+	info->materialized_view_query = info->query->ToString();
+	result->info = std::move(info);
+	return result;
+}
+
 CreateTableDefinition
 PEGTransformerFactory::TransformCreateTableAs(PEGTransformer &transformer, optional<ColumnList> identifier_list,
                                               optional<PartitionSortedOptions> partition_sorted_options,

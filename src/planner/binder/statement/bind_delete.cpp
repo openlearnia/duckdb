@@ -29,6 +29,9 @@ BoundStatement Binder::BindNode(DeleteQueryNode &node) {
 		throw BinderException("Can only delete from base table");
 	}
 	auto &table = *table_ptr;
+	if (table.IsMaterializedView()) {
+		throw BinderException("Cannot delete from materialized view \"%s\"", table.name);
+	}
 
 	if (auto expanded = TryExpandTriggers(node, table, TriggerEventType::DELETE_EVENT)) {
 		return std::move(*expanded);
