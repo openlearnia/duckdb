@@ -45,6 +45,8 @@ struct CreateTableInfo : public CreateInfo {
 	bool materialized_view = false;
 	//! Canonical defining SELECT for a native materialized view
 	string materialized_view_query;
+	//! Whether this table represents a materialized view owned by an extension catalog.
+	bool catalog_materialized_view = false;
 	//! Transient flags used to bind REFRESH MATERIALIZED VIEW through the CTAS path
 	bool materialized_view_refresh = false;
 	bool materialized_view_if_stale = false;
