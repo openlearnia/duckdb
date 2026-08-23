@@ -22,8 +22,10 @@ class DuckTableEntry;
 class RowGroupCollection;
 class RowVersionManager;
 class DuckTransactionManager;
+enum class TableModificationType : uint8_t { APPEND = 1, DELETE = 2, UPDATE = 4, ALL = 7 };
 class StorageLockKey;
 class StorageCommitState;
+class DataTable;
 struct DataTableInfo;
 struct UndoBufferProperties;
 
@@ -88,6 +90,11 @@ public:
 	void PushAppend(DuckTableEntry &table_entry, idx_t row_start, idx_t row_count);
 	UndoBufferReference CreateUpdateInfo(DuckTableEntry &table_entry, idx_t type_size, idx_t entries,
 	                                     idx_t row_group_start);
+	void ModifyTable(DataTable &table, TableModificationType type = TableModificationType::ALL);
+	//! Returns whether this transaction has modified the specified physical table.
+	bool HasModifiedTable(DataTable &table) const;
+	//! Returns the modification categories recorded for a table in this transaction.
+	uint8_t GetTableModificationType(DataTable &table) const;
 
 	DuckTransactionManager &GetTransactionManager();
 	bool IsDuckTransaction() const override {
@@ -125,6 +132,9 @@ private:
 	};
 	//! Active locks on tables
 	reference_map_t<DataTableInfo, unique_ptr<ActiveTableLock>> active_locks;
+	//! Physical tables modified by this transaction, used for MV freshness checks.
+	reference_set_t<DataTable> modified_tables;
+	reference_map_t<DataTable, uint8_t> modified_table_types;
 	//! Flag to prevent auto-checkpointing inside a checkpoint transaction.
 	bool is_checkpoint_transaction = false;
 };

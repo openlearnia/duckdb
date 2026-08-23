@@ -183,6 +183,12 @@ public:
 	void FinalizeAppend(DuckTransaction &transaction, TableAppendState &state);
 	//! Commit the append
 	void CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count);
+	void CommitModification(uint8_t modification_type = 7);
+	idx_t GetModificationGeneration() const;
+	idx_t GetAppendGeneration() const;
+	idx_t GetDeleteGeneration() const;
+	idx_t GetUpdateGeneration() const;
+	idx_t GetAppendedRows() const;
 	//! Write a segment of the table to the WAL
 	void WriteToLog(DuckTransaction &transaction, WriteAheadLog &log, idx_t row_start, idx_t count,
 	                optional_ptr<StorageCommitState> commit_state);
@@ -347,5 +353,10 @@ private:
 	shared_ptr<RowGroupCollection> row_groups;
 	//! The version of the data table
 	atomic<DataTableVersion> version;
+	atomic<idx_t> modification_generation;
+	atomic<idx_t> append_generation;
+	atomic<idx_t> delete_generation;
+	atomic<idx_t> update_generation;
+	atomic<idx_t> appended_rows;
 };
 } // namespace duckdb

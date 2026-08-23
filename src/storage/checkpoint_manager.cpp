@@ -733,6 +733,12 @@ void CheckpointReader::ReadTableData(CatalogTransaction transaction, Deserialize
 	// Cover reading new storage files.
 	auto index_storage_infos =
 	    deserializer.ReadPropertyWithExplicitDefault<vector<IndexStorageInfo>>(104, "index_storage_infos", {});
+	auto modification_generation =
+	    deserializer.ReadPropertyWithExplicitDefault<idx_t>(106, "modification_generation", 0);
+	auto append_generation = deserializer.ReadPropertyWithExplicitDefault<idx_t>(107, "append_generation", 0);
+	auto delete_generation = deserializer.ReadPropertyWithExplicitDefault<idx_t>(108, "delete_generation", 0);
+	auto update_generation = deserializer.ReadPropertyWithExplicitDefault<idx_t>(109, "update_generation", 0);
+	auto appended_rows = deserializer.ReadPropertyWithExplicitDefault<idx_t>(110, "appended_rows", 0);
 	// Read next_row_id as total_rows for backwards compatibility. Older storage versions do not allow for gaps in
 	// row_id numbering, in which case next_row_id = total_rows.
 	auto next_row_id = deserializer.ReadPropertyWithExplicitDefault<idx_t>(105, "next_row_id", total_rows);
@@ -763,6 +769,11 @@ void CheckpointReader::ReadTableData(CatalogTransaction transaction, Deserialize
 	data_reader.ReadTableData();
 
 	bound_info.data->total_rows = total_rows;
+	bound_info.data->modification_generation = modification_generation;
+	bound_info.data->append_generation = append_generation;
+	bound_info.data->delete_generation = delete_generation;
+	bound_info.data->update_generation = update_generation;
+	bound_info.data->appended_rows = appended_rows;
 	bound_info.data->next_row_id = next_row_id;
 	bound_info.data->read_metadata_pointers = read_pointers;
 }

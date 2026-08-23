@@ -1026,6 +1026,13 @@
         "custom_implementation": true
     },
     {
+        "name": "materialized_view_stale_read",
+        "description": "Behavior when querying a stale materialized view: allow, warn, or error",
+        "type": "VARCHAR",
+        "scope": "local",
+        "custom_implementation": true
+    },
+    {
         "name": "max_execution_time",
         "description": "The maximum execution time per query in milliseconds (0 = no limit)",
         "type": "BIGINT",

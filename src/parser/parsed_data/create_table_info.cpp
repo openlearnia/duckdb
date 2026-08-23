@@ -40,6 +40,16 @@ unique_ptr<CreateInfo> CreateTableInfo::Copy() const {
 	result->catalog_materialized_view = catalog_materialized_view;
 	result->materialized_view_refresh = materialized_view_refresh;
 	result->materialized_view_if_stale = materialized_view_if_stale;
+	result->materialized_view_skip_refresh = materialized_view_skip_refresh;
+	result->materialized_view_dependency_catalogs = materialized_view_dependency_catalogs;
+	result->materialized_view_dependency_schemas = materialized_view_dependency_schemas;
+	result->materialized_view_dependency_tables = materialized_view_dependency_tables;
+	result->materialized_view_dependency_generations = materialized_view_dependency_generations;
+	result->materialized_view_dependency_append_generations = materialized_view_dependency_append_generations;
+	result->materialized_view_dependency_delete_generations = materialized_view_dependency_delete_generations;
+	result->materialized_view_dependency_update_generations = materialized_view_dependency_update_generations;
+	result->materialized_view_dependency_row_counts = materialized_view_dependency_row_counts;
+	result->materialized_view_refresh_mode = materialized_view_refresh_mode;
 	return std::move(result);
 }
 

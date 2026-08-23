@@ -9,6 +9,7 @@
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/parsed_data/comment_on_column_info.hpp"
@@ -31,6 +32,7 @@
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/common/printer.hpp"
 
 namespace duckdb {
 
@@ -1444,6 +1446,16 @@ DataTable &DuckTableEntry::GetStorage() {
 }
 
 TableFunction DuckTableEntry::GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) {
+	if (IsMaterializedView() && MaterializedViewIsStale(context)) {
+		auto mode = StringUtil::Lower(MaterializedViewStaleReadSetting::GetSetting(context).GetValue<string>());
+		if (mode == "error") {
+			throw InvalidInputException("Materialized view \"%s\" is stale - run REFRESH MATERIALIZED VIEW, or SET "
+			                            "materialized_view_stale_read='allow'", name);
+		}
+		if (mode == "warn") {
+			Printer::PrintF("WARNING: Materialized view \"%s\" is stale\n", name.c_str());
+		}
+	}
 	bind_data = make_uniq<TableScanBindData>(*this);
 	return TableScanFunction::GetFunction();
 }

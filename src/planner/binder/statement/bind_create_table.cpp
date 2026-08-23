@@ -23,6 +23,7 @@
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/main/config.hpp"
 
@@ -78,6 +79,58 @@ static void VerifyCompressionType(ClientContext &context, optional_ptr<StorageMa
 			                      col.Name(), logical_type.ToString(), EnumUtil::ToString(physical_type),
 			                      CompressionTypeToString(compression_type));
 		}
+	}
+}
+
+static void CaptureMaterializedViewDependencies(ClientContext &context, LogicalOperator &op, CreateTableInfo &base) {
+	if (op.type == LogicalOperatorType::LOGICAL_GET) {
+		auto &get = op.Cast<LogicalGet>();
+		auto table = get.GetTable();
+		if (table && table->IsDuckTable()) {
+			bool already_captured = false;
+			for (idx_t i = 0; i < base.materialized_view_dependency_tables.size(); i++) {
+				if (base.materialized_view_dependency_catalogs[i] == table->ParentCatalog().GetName() &&
+				    base.materialized_view_dependency_schemas[i] == table->schema.name &&
+				    base.materialized_view_dependency_tables[i] == table->name) {
+					already_captured = true;
+					break;
+				}
+			}
+			if (!already_captured) {
+				base.dependencies.AddDependency(*table);
+				auto &storage = table->GetStorage();
+				auto generation = storage.GetModificationGeneration();
+				auto append_generation = storage.GetAppendGeneration();
+				auto delete_generation = storage.GetDeleteGeneration();
+				auto update_generation = storage.GetUpdateGeneration();
+				auto &transaction = DuckTransaction::Get(context, table->ParentCatalog());
+				auto modification_type = transaction.GetTableModificationType(storage);
+				if (modification_type != 0) {
+					generation++;
+				}
+				if (modification_type & static_cast<uint8_t>(TableModificationType::APPEND)) {
+					append_generation++;
+				}
+				if (modification_type & static_cast<uint8_t>(TableModificationType::DELETE)) {
+					delete_generation++;
+				}
+				if (modification_type & static_cast<uint8_t>(TableModificationType::UPDATE)) {
+					update_generation++;
+				}
+				base.materialized_view_dependency_catalogs.push_back(table->ParentCatalog().GetName().GetIdentifierName());
+				base.materialized_view_dependency_schemas.push_back(table->schema.name.GetIdentifierName());
+				base.materialized_view_dependency_tables.push_back(table->name.GetIdentifierName());
+				base.materialized_view_dependency_generations.push_back(generation);
+				base.materialized_view_dependency_append_generations.push_back(append_generation);
+				base.materialized_view_dependency_delete_generations.push_back(delete_generation);
+				base.materialized_view_dependency_update_generations.push_back(update_generation);
+				base.materialized_view_dependency_row_counts.push_back(
+				    storage.GetAppendedRows() + transaction.GetLocalStorage().AddedRows(storage));
+			}
+		}
+	}
+	for (auto &child : op.children) {
+		CaptureMaterializedViewDependencies(context, *child, base);
 	}
 }
 
@@ -630,6 +683,9 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		auto query_obj = Bind(*base.query);
 		base.query.reset();
 		result->query = std::move(query_obj.plan);
+		if (base.materialized_view) {
+			CaptureMaterializedViewDependencies(context, *result->query, base);
+		}
 
 		// construct the set of columns based on the names and types of the query
 		auto &names = query_obj.names;

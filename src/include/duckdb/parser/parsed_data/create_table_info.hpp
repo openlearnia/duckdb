@@ -50,6 +50,16 @@ struct CreateTableInfo : public CreateInfo {
 	//! Transient flags used to bind REFRESH MATERIALIZED VIEW through the CTAS path.
 	bool materialized_view_refresh = false;
 	bool materialized_view_if_stale = false;
+	bool materialized_view_skip_refresh = false;
+	vector<string> materialized_view_dependency_catalogs;
+	vector<string> materialized_view_dependency_schemas;
+	vector<string> materialized_view_dependency_tables;
+	vector<idx_t> materialized_view_dependency_generations;
+	vector<idx_t> materialized_view_dependency_append_generations;
+	vector<idx_t> materialized_view_dependency_delete_generations;
+	vector<idx_t> materialized_view_dependency_update_generations;
+	vector<idx_t> materialized_view_dependency_row_counts;
+	string materialized_view_refresh_mode = "full";
 
 public:
 	DUCKDB_API unique_ptr<CreateInfo> Copy() const override;

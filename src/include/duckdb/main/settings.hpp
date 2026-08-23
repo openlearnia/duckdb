@@ -1515,6 +1515,17 @@ struct LoggingStorage {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct MaterializedViewStaleReadSetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "materialized_view_stale_read";
+	static constexpr const char *Description =
+	    "Behavior when querying a stale materialized view: allow, warn, or error";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct MaxExecutionTimeSetting {
 	using RETURN_TYPE = int64_t;
 	static constexpr const char *Name = "max_execution_time";

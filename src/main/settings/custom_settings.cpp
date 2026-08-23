@@ -562,6 +562,23 @@ void DuckDBAPISetting::OnSet(SettingCallbackInfo &info, Value &input) {
 	}
 }
 
+void MaterializedViewStaleReadSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto mode = StringUtil::Lower(input.GetValue<string>());
+	if (mode != "allow" && mode != "warn" && mode != "error") {
+		throw InvalidInputException(
+		    "Unsupported materialized_view_stale_read \"%s\"; supported options are allow, warn, error", mode);
+	}
+	ClientConfig::GetConfig(context).materialized_view_stale_read = mode;
+}
+
+void MaterializedViewStaleReadSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).materialized_view_stale_read = "allow";
+}
+
+Value MaterializedViewStaleReadSetting::GetSetting(const ClientContext &context) {
+	return ClientConfig::GetConfig(context).materialized_view_stale_read;
+}
+
 //===----------------------------------------------------------------------===//
 // Vacuum Rebuild Indexes
 //===----------------------------------------------------------------------===//

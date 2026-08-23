@@ -189,6 +189,10 @@ struct DuckDBTablesFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct DuckDBMaterializedViewsFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct DuckDBTableSample {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

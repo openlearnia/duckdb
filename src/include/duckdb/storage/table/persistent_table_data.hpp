@@ -25,6 +25,11 @@ public:
 	idx_t total_rows;
 	idx_t next_row_id;
 	idx_t row_group_count;
+	idx_t modification_generation = 0;
+	idx_t append_generation = 0;
+	idx_t delete_generation = 0;
+	idx_t update_generation = 0;
+	idx_t appended_rows = 0;
 	MetaBlockPointer block_pointer;
 };
 

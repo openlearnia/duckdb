@@ -197,6 +197,20 @@ void CreateTableInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<bool>(207, "catalog_materialized_view", catalog_materialized_view);
 	serializer.WritePropertyWithDefault<bool>(208, "materialized_view", materialized_view);
 	serializer.WritePropertyWithDefault<string>(209, "materialized_view_query", materialized_view_query);
+	serializer.WritePropertyWithDefault<vector<string>>(210, "materialized_view_dependency_catalogs", materialized_view_dependency_catalogs);
+	serializer.WritePropertyWithDefault<vector<string>>(211, "materialized_view_dependency_schemas", materialized_view_dependency_schemas);
+	serializer.WritePropertyWithDefault<vector<string>>(212, "materialized_view_dependency_tables", materialized_view_dependency_tables);
+	serializer.WritePropertyWithDefault<vector<idx_t>>(213, "materialized_view_dependency_generations", materialized_view_dependency_generations);
+	serializer.WritePropertyWithDefault<vector<idx_t>>(214, "materialized_view_dependency_append_generations",
+	                                                  materialized_view_dependency_append_generations);
+	serializer.WritePropertyWithDefault<vector<idx_t>>(215, "materialized_view_dependency_delete_generations",
+	                                                  materialized_view_dependency_delete_generations);
+	serializer.WritePropertyWithDefault<vector<idx_t>>(216, "materialized_view_dependency_update_generations",
+	                                                  materialized_view_dependency_update_generations);
+	serializer.WritePropertyWithDefault<vector<idx_t>>(217, "materialized_view_dependency_row_counts",
+	                                                  materialized_view_dependency_row_counts);
+	serializer.WritePropertyWithDefault<string>(218, "materialized_view_refresh_mode", materialized_view_refresh_mode,
+	                                           "full");
 }
 
 unique_ptr<CreateInfo> CreateTableInfo::Deserialize(Deserializer &deserializer) {
@@ -211,6 +225,20 @@ unique_ptr<CreateInfo> CreateTableInfo::Deserialize(Deserializer &deserializer) 
 	deserializer.ReadPropertyWithDefault<bool>(207, "catalog_materialized_view", result->catalog_materialized_view);
 	deserializer.ReadPropertyWithDefault<bool>(208, "materialized_view", result->materialized_view);
 	deserializer.ReadPropertyWithDefault<string>(209, "materialized_view_query", result->materialized_view_query);
+	deserializer.ReadPropertyWithDefault<vector<string>>(210, "materialized_view_dependency_catalogs", result->materialized_view_dependency_catalogs);
+	deserializer.ReadPropertyWithDefault<vector<string>>(211, "materialized_view_dependency_schemas", result->materialized_view_dependency_schemas);
+	deserializer.ReadPropertyWithDefault<vector<string>>(212, "materialized_view_dependency_tables", result->materialized_view_dependency_tables);
+	deserializer.ReadPropertyWithDefault<vector<idx_t>>(213, "materialized_view_dependency_generations", result->materialized_view_dependency_generations);
+	deserializer.ReadPropertyWithDefault<vector<idx_t>>(214, "materialized_view_dependency_append_generations",
+	                                                   result->materialized_view_dependency_append_generations);
+	deserializer.ReadPropertyWithDefault<vector<idx_t>>(215, "materialized_view_dependency_delete_generations",
+	                                                   result->materialized_view_dependency_delete_generations);
+	deserializer.ReadPropertyWithDefault<vector<idx_t>>(216, "materialized_view_dependency_update_generations",
+	                                                   result->materialized_view_dependency_update_generations);
+	deserializer.ReadPropertyWithDefault<vector<idx_t>>(217, "materialized_view_dependency_row_counts",
+	                                                   result->materialized_view_dependency_row_counts);
+	deserializer.ReadPropertyWithDefault<string>(218, "materialized_view_refresh_mode",
+	                                           result->materialized_view_refresh_mode);
 	result->SetName(std::move(table));
 	return std::move(result);
 }

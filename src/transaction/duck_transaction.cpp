@@ -94,6 +94,7 @@ void DuckTransaction::PushAttach(AttachedDatabase &db) {
 
 void DuckTransaction::PushDelete(DuckTableEntry &table_entry, RowVersionManager &info, idx_t vector_idx, row_t rows[],
                                  idx_t count, idx_t base_row) {
+	ModifyTable(table_entry.GetStorage(), TableModificationType::DELETE);
 	bool is_consecutive = true;
 	// check if the rows are consecutive
 	for (idx_t i = 0; i < count; i++) {
@@ -126,6 +127,7 @@ void DuckTransaction::PushDelete(DuckTableEntry &table_entry, RowVersionManager 
 }
 
 void DuckTransaction::PushAppend(DuckTableEntry &table_entry, idx_t start_row, idx_t row_count) {
+	ModifyTable(table_entry.GetStorage(), TableModificationType::APPEND);
 	auto undo_entry = undo_buffer.CreateEntry(UndoFlags::INSERT_TUPLE, sizeof(AppendInfo));
 	auto append_info = reinterpret_cast<AppendInfo *>(undo_entry.GetDataMutable());
 	append_info->table = &table_entry;
@@ -135,6 +137,7 @@ void DuckTransaction::PushAppend(DuckTableEntry &table_entry, idx_t start_row, i
 
 UndoBufferReference DuckTransaction::CreateUpdateInfo(DuckTableEntry &table_entry, idx_t type_size, idx_t entries,
                                                       idx_t row_group_start) {
+	ModifyTable(table_entry.GetStorage(), TableModificationType::UPDATE);
 	idx_t alloc_size = UpdateInfo::GetAllocSize(type_size);
 	auto undo_entry = undo_buffer.CreateEntry(UndoFlags::UPDATE_TUPLE, alloc_size);
 	auto &update_info = UpdateInfo::Get(undo_entry);
@@ -289,6 +292,15 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, CommitInfo &commit_info,
 			commit_state->FlushCommit();
 		}
 		drop_state.FinalizeCommit();
+		for (auto &table : modified_tables) {
+			auto type_entry = modified_table_types.find(table);
+			auto modification_type = type_entry == modified_table_types.end()
+			                             ? static_cast<uint8_t>(TableModificationType::ALL)
+			                             : type_entry->second;
+			table.get().CommitModification(modification_type);
+		}
+		modified_tables.clear();
+		modified_table_types.clear();
 		return ErrorData();
 	} catch (std::exception &ex) {
 		// Record the error and run RevertCommit() outside this try-catch: RevertCommit() iterates the
@@ -328,10 +340,38 @@ ErrorData DuckTransaction::Rollback() {
 	try {
 		storage->Rollback();
 		undo_buffer.Rollback();
+		modified_tables.clear();
+		modified_table_types.clear();
 		return ErrorData();
 	} catch (std::exception &ex) {
 		return ErrorData(ex);
 	}
+}
+
+bool DuckTransaction::HasModifiedTable(DataTable &table) const {
+	return GetTableModificationType(table) != 0;
+}
+
+void DuckTransaction::ModifyTable(DataTable &table, TableModificationType type) {
+	modified_tables.insert(table);
+	auto entry = modified_table_types.find(table);
+	if (entry == modified_table_types.end()) {
+		modified_table_types.insert(make_pair(reference<DataTable>(table), static_cast<uint8_t>(type)));
+	} else {
+		entry->second |= static_cast<uint8_t>(type);
+	}
+}
+
+uint8_t DuckTransaction::GetTableModificationType(DataTable &table) const {
+	uint8_t result = 0;
+	auto entry = modified_table_types.find(table);
+	if (entry != modified_table_types.end()) {
+		result = entry->second;
+	}
+	if (storage->Find(table)) {
+		result |= static_cast<uint8_t>(TableModificationType::APPEND);
+	}
+	return result;
 }
 
 void DuckTransaction::Cleanup(transaction_t lowest_active_transaction) {

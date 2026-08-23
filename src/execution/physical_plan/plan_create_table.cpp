@@ -41,7 +41,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreateTable &op) {
 	auto existing_entry = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, create_info.GetQualifiedName().Schema(),
 	                                       create_info.GetTableName(), OnEntryNotFound::RETURN_NULL);
 	bool replace = op.info->Base().on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT;
-	if ((!existing_entry || replace) && !op.children.empty()) {
+	if ((!existing_entry || replace) && !op.children.empty() && !create_info.materialized_view_skip_refresh) {
 		auto &plan = CreatePlan(*op.children[0]);
 		return op.schema.catalog.PlanCreateTableAs(context, *this, op, plan);
 	}
