@@ -28,7 +28,7 @@ constexpr const char *TableCatalogEntry::Name;
 
 TableCatalogEntry::TableCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info)
     : StandardEntry(CatalogType::TABLE_ENTRY, schema, catalog, info.GetTableName()), columns(std::move(info.columns)),
-      constraints(std::move(info.constraints)) {
+      constraints(std::move(info.constraints)), catalog_materialized_view(info.catalog_materialized_view) {
 	this->temporary = info.temporary;
 	this->dependencies = info.dependencies;
 	this->comment = info.comment;
@@ -106,6 +106,7 @@ unique_ptr<CreateInfo> TableCatalogEntry::GetInfo() const {
 	result->internal = internal;
 	result->comment = comment;
 	result->tags = tags;
+	result->catalog_materialized_view = catalog_materialized_view;
 	return std::move(result);
 }
 

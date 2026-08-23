@@ -70,6 +70,8 @@ static unique_ptr<FunctionData> DuckDBTablesBind(ClientContext &context, TableFu
 
 	names.emplace_back("sql");
 	return_types.emplace_back(LogicalType::VARCHAR);
+	names.emplace_back("is_materialized");
+	return_types.emplace_back(LogicalType::BOOLEAN);
 
 	return nullptr;
 }
@@ -170,6 +172,7 @@ void DuckDBTablesFunction(ClientContext &context, TableFunctionInput &data_p, Da
 		auto table_info = table.GetInfo();
 		table_info->StripCatalogQualification();
 		sql.Append(Value(table_info->ToString()));
+		output.SetValue(16, count, Value::BOOLEAN(table.IsMaterializedViewForCatalog()));
 		count++;
 	}
 }

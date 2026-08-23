@@ -32,6 +32,7 @@ unique_ptr<CreateInfo> CreateTableInfo::Copy() const {
 	for (auto &option : options) {
 		result->options.emplace(option.first, option.second->Copy());
 	}
+	result->catalog_materialized_view = catalog_materialized_view;
 	if (query) {
 		result->query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());
 	}

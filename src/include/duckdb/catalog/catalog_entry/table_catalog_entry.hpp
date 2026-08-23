@@ -70,6 +70,9 @@ public:
 
 public:
 	DUCKDB_API unique_ptr<CreateInfo> GetInfo() const override;
+	DUCKDB_API bool IsMaterializedViewForCatalog() const {
+		return catalog_materialized_view;
+	}
 
 	DUCKDB_API bool HasGeneratedColumns() const;
 
@@ -167,5 +170,6 @@ protected:
 	ColumnList columns;
 	//! A list of constraints that are part of this table
 	vector<unique_ptr<Constraint>> constraints;
+	bool catalog_materialized_view = false;
 };
 } // namespace duckdb
