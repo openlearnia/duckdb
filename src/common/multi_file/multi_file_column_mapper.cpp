@@ -957,6 +957,41 @@ static RewrittenMappedExpression RewriteMappedValueExpression(const Expression &
 		return result;
 	case ExpressionClass::BOUND_FUNCTION: {
 		auto &func = expr.Cast<BoundFunctionExpression>();
+		// List indexing is represented as array_extract(list, index).  When the
+		// list element is a struct, a subsequent field extraction must continue
+		// through the element mapping rather than attempting a STRUCT -> STRUCT
+		// cast against the file's older schema.
+		if (func.Function().GetName() == "array_extract" && func.GetChildren().size() == 2 &&
+		    func.GetChildren()[1]->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT &&
+		    func.GetChildren()[1]->Cast<BoundConstantExpression>().GetValue().type().IsNumeric()) {
+			auto child_result = RewriteMappedValueExpression(*func.GetChildren()[0], mapping, target_type);
+			if (!child_result.expr || !child_result.mapping || !child_result.type ||
+			    (child_result.type->id() != LogicalTypeId::LIST && child_result.type->id() != LogicalTypeId::ARRAY)) {
+				return result;
+			}
+			auto entry = child_result.mapping->child_mapping.find(MultiFileGlobalIndex(0));
+			if (entry == child_result.mapping->child_mapping.end()) {
+				return result;
+			}
+			auto &local_mapping = *entry->second;
+			LogicalType local_child_type;
+			if (child_result.type->id() == LogicalTypeId::LIST) {
+				local_child_type = ListType::GetChildType(*child_result.type);
+			} else {
+				local_child_type = ArrayType::GetChildType(*child_result.type);
+			}
+			auto rewritten = expr.Copy();
+			auto &rewritten_func = rewritten->Cast<BoundFunctionExpression>();
+			rewritten_func.GetChildrenMutable()[0] = std::move(child_result.expr);
+			rewritten_func.FunctionMutable().SetReturnType(local_child_type);
+			rewritten->SetReturnType(local_child_type);
+			result.expr = std::move(rewritten);
+			result.mapping = &local_mapping;
+			// Keep the type alive for the caller by using the function's return
+			// type, whose storage belongs to the copied expression.
+			result.type = &result.expr->GetReturnType();
+			return result;
+		}
 		idx_t child_idx;
 		if (!TryGetStructExtractChildIndex(func, child_idx)) {
 			return result;
@@ -968,6 +1003,9 @@ static RewrittenMappedExpression RewriteMappedValueExpression(const Expression &
 		}
 		auto entry = child_result.mapping->child_mapping.find(MultiFileGlobalIndex(child_idx));
 		if (entry == child_result.mapping->child_mapping.end()) {
+			result.expr = make_uniq<BoundConstantExpression>(Value(func.GetReturnType()));
+			result.mapping = child_result.mapping;
+			result.type = &result.expr->GetReturnType();
 			return result;
 		}
 		auto &local_mapping = *entry->second;

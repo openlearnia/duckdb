@@ -53,7 +53,10 @@ inline bool TryGetStructExtractChildIndex(const BoundFunctionExpression &func, i
 		}
 		return false;
 	}
-	if (func.Function().GetName() != "struct_extract" || func.GetChildren().size() <= 1 ||
+	if (func.Function().GetName() != "struct_extract" && func.Function().GetName() != "array_extract") {
+		return false;
+	}
+	if (func.GetChildren().size() <= 1 ||
 	    func.GetChildren()[1]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT ||
 	    func.GetChildren()[0]->GetReturnType().id() != LogicalTypeId::STRUCT) {
 		return false;
