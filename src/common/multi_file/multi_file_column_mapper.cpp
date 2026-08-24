@@ -465,6 +465,11 @@ static ColumnMapResult MapColumnStruct(ClientContext &context, const MultiFileCo
 
 			mapping->child_mapping.emplace(MultiFileGlobalIndex(0), std::move(child_mapping.mapping));
 			child_mapping.mapping = std::move(mapping);
+		} else if (child_mapping.default_value) {
+			// Pushdown requested a field that is absent from this older
+			// struct version. Return the typed default directly; retaining the
+			// parent index would force an invalid STRUCT-to-STRUCT cast.
+			return child_mapping;
 		}
 		return child_mapping;
 	}
@@ -520,7 +525,17 @@ static ColumnMapResult MapColumnStruct(ClientContext &context, const MultiFileCo
 
 	ColumnMapResult result;
 	result.local_column = local_column;
-
+	if (column_mapping.empty() && !default_expressions.empty()) {
+		// Keep the nested remap path when no field from the old struct
+		// survives. Falling back to a direct STRUCT cast is invalid in 2.0.
+		result.column_map = Value::STRUCT(child_list_t<Value>());
+		if (!is_root) {
+			vector<Value> child_list;
+			child_list.push_back(Value(local_column.name));
+			child_list.push_back(std::move(result.column_map));
+			result.column_map = Value::TUPLE(std::move(child_list));
+		}
+	}
 	if (!column_mapping.empty()) {
 		// we have column mappings at this level - construct the struct
 		result.column_map = Value::STRUCT(std::move(column_mapping));
@@ -591,13 +606,41 @@ static ColumnMapResult MapColumn(ClientContext &context, const MultiFileColumnDe
 }
 
 static unique_ptr<Expression> ConstructMapExpression(ClientContext &context, MultiFileLocalIndex local_idx,
-                                                     ColumnMapResult &mapping, const LogicalType &global_column_type,
-                                                     const LogicalType &local_column_type, bool is_trivially_mappable) {
+                                                      ColumnMapResult &mapping, const LogicalType &global_column_type,
+                                                      const LogicalType &local_column_type, bool is_trivially_mappable) {
 	unique_ptr<Expression> expr = make_uniq<BoundReferenceExpression>(local_column_type, local_idx.GetIndex());
+	if (global_column_type.id() == LogicalTypeId::STRUCT && local_column_type.id() == LogicalTypeId::STRUCT) {
+		bool has_common_member = false;
+		for (auto &global_child : StructType::GetChildTypes(global_column_type)) {
+			for (auto &local_child : StructType::GetChildTypes(local_column_type)) {
+				if (StringUtil::CIEquals(global_child.first.GetIdentifierName(), local_child.first.GetIdentifierName())) {
+					has_common_member = true;
+					break;
+				}
+			}
+			if (has_common_member) {
+				break;
+			}
+		}
+		bool has_mapped_children = !mapping.column_map.IsNull();
+		if (has_mapped_children && mapping.column_map.type().id() == LogicalTypeId::STRUCT) {
+			has_mapped_children = StructType::GetChildCount(mapping.column_map.type()) > 0;
+		}
+		if (!has_common_member && !has_mapped_children) {
+			// No source field can contribute to the target STRUCT. DuckDB 2.0
+			// rejects the implicit STRUCT cast in this case; the correct
+			// schema-evolution value is the target's NULL/default struct.
+			child_list_t<Value> defaults;
+			for (auto &global_child : StructType::GetChildTypes(global_column_type)) {
+				defaults.emplace_back(global_child.first, Value(global_child.second));
+			}
+			return make_uniq<BoundConstantExpression>(Value::STRUCT(std::move(defaults)));
+		}
+	}
 	const bool can_use_remap_struct =
 	    global_column_type.IsNested() &&
 	    (mapping.column_map.IsNull() || mapping.column_map.type().id() == LogicalTypeId::STRUCT) &&
-	    !is_trivially_mappable && local_column_type.IsNested();
+		!is_trivially_mappable && local_column_type.IsNested();
 	if (!can_use_remap_struct) {
 		// not a struct - potentially add a cast
 		if (local_column_type != global_column_type) {
