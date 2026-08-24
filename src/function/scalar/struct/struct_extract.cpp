@@ -124,6 +124,11 @@ static unique_ptr<BaseStatistics> PropagateStructExtractStats(ClientContext &con
 	auto &bind_data = input.bind_data;
 
 	auto &info = bind_data->Cast<StructExtractBindData>();
+	if (child_stats.empty() || child_stats[0].GetStatsType() != StatisticsType::STRUCT_STATS) {
+		// A nested scan may only have base statistics after schema evolution.
+		// Statistics propagation must degrade to unknown rather than asserting.
+		return make_uniq<BaseStatistics>(BaseStatistics::CreateUnknown(input.expr.GetReturnType()));
+	}
 	auto struct_child_stats = StructStats::GetChildStats(child_stats[0]);
 	return struct_child_stats[info.index].ToUnique();
 }
