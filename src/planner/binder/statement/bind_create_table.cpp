@@ -733,19 +733,8 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 			for (auto &column : base.columns.Logical()) {
 				column_names.push_back(column.Name().GetIdentifierName());
 			}
-			auto qualified_name = base.GetQualifiedName();
-			auto catalog_name = qualified_name.Catalog().GetIdentifierName().empty()
-			                        ? schema.ParentCatalog().GetName().GetIdentifierName()
-			                        : qualified_name.Catalog().GetIdentifierName();
-			auto schema_name = qualified_name.Schema().GetIdentifierName().empty()
-			                     ? schema.name.GetIdentifierName()
-			                     : qualified_name.Schema().GetIdentifierName();
-			string view_relation_sql = StringUtil::Format(
-			    "%s.%s.%s", KeywordHelper::WriteQuoted(catalog_name, '"'), KeywordHelper::WriteQuoted(schema_name, '"'),
-			    KeywordHelper::WriteQuoted(qualified_name.Name().GetIdentifierName(), '"'));
-			base.materialized_view_refresh_diff_query = BuildMaterializedViewLogicalDiffQuery(
-			    view_relation_sql, base.materialized_view_query, materialized_view_candidate_sql, column_names,
-			    !base.materialized_view_refresh_times.empty());
+			base.materialized_view_refresh_key_positions = GetMaterializedViewLogicalDiffKeyPositions(
+			    base.materialized_view_query, column_names);
 		}
 
 		// Bind all types

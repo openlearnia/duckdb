@@ -89,6 +89,10 @@ public:
 	int64_t materialized_view_rows_added = -1;
 	int64_t materialized_view_rows_removed = -1;
 	int64_t materialized_view_rows_changed = -1;
+	vector<idx_t> materialized_view_key_positions;
+	vector<vector<Value>> materialized_view_old_rows;
+	unique_ptr<ColumnDataCollection> materialized_view_candidate_rows;
+	mutex materialized_view_diff_lock;
 
 	bool ReadyToMerge(const idx_t count) const;
 	void ScheduleMergeTasks(ClientContext &context, const idx_t min_batch_index);
@@ -335,17 +339,26 @@ void BatchInsertGlobalState::AddCollection(ClientContext &context, const idx_t b
 //===--------------------------------------------------------------------===//
 unique_ptr<GlobalSinkState> PhysicalBatchInsert::GetGlobalSinkState(ClientContext &context) const {
 	optional_ptr<DuckTableEntry> table;
-	int64_t rows_added = -1;
-	int64_t rows_removed = -1;
-	int64_t rows_changed = -1;
+	vector<vector<Value>> old_rows;
+	vector<idx_t> key_positions;
 	if (info) {
 		// CREATE TABLE AS
 		D_ASSERT(!insert_table);
 		auto &catalog = schema->catalog;
 		auto &create_info = info->base->Cast<CreateTableInfo>();
-		if (create_info.materialized_view && !create_info.materialized_view_skip_refresh) {
-			PhysicalInsert::EvaluateMaterializedViewLogicalDiff(
-			    context, create_info.materialized_view_refresh_diff_query, rows_added, rows_removed, rows_changed);
+		if (create_info.materialized_view && !create_info.materialized_view_skip_refresh &&
+		    !create_info.materialized_view_refresh_key_positions.empty()) {
+			key_positions = create_info.materialized_view_refresh_key_positions;
+			if (!create_info.materialized_view_refresh_times.empty()) {
+				auto existing_entry = catalog.GetEntry(context, CatalogType::TABLE_ENTRY,
+				                                      create_info.GetQualifiedName().Schema(), create_info.GetTableName(),
+				                                      OnEntryNotFound::RETURN_NULL);
+				if (existing_entry && existing_entry->type == CatalogType::TABLE_ENTRY &&
+				    existing_entry->Cast<TableCatalogEntry>().IsDuckTable()) {
+					old_rows = PhysicalInsert::SnapshotMaterializedViewRows(
+					    context, existing_entry->Cast<TableCatalogEntry>().Cast<DuckTableEntry>());
+				}
+			}
 		}
 		auto created_table = catalog.CreateTable(catalog.GetCatalogTransaction(context), *schema.get_mutable(), *info);
 		table = &created_table->Cast<DuckTableEntry>();
@@ -363,9 +376,11 @@ unique_ptr<GlobalSinkState> PhysicalBatchInsert::GetGlobalSinkState(ClientContex
 		result->materialized_view_refresh_start_ms = NumericCast<idx_t>(
 		    std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch())
 		        .count());
-		result->materialized_view_rows_added = rows_added;
-		result->materialized_view_rows_removed = rows_removed;
-		result->materialized_view_rows_changed = rows_changed;
+		result->materialized_view_key_positions = std::move(key_positions);
+		result->materialized_view_old_rows = std::move(old_rows);
+		if (!result->materialized_view_key_positions.empty()) {
+			result->materialized_view_candidate_rows = make_uniq<ColumnDataCollection>(context, insert_types);
+		}
 	}
 	return std::move(result);
 }
@@ -453,6 +468,10 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, DataChunk &i
 
 	auto &table = gstate.table;
 	insert_chunk.Flatten();
+	if (gstate.materialized_view_candidate_rows) {
+		lock_guard<mutex> guard(gstate.materialized_view_diff_lock);
+		gstate.materialized_view_candidate_rows->Append(insert_chunk);
+	}
 
 	auto batch_index = lstate.partition_info.batch_index.GetIndex();
 	// check if we should process this batch
@@ -548,6 +567,12 @@ SinkCombineResultType PhysicalBatchInsert::Combine(ExecutionContext &context, Op
 SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                                OperatorSinkFinalizeInput &input) const {
 	auto &g_state = input.global_state.Cast<BatchInsertGlobalState>();
+	if (g_state.materialized_view_candidate_rows) {
+		PhysicalInsert::CalculateMaterializedViewLogicalDiff(
+		    g_state.materialized_view_old_rows, *g_state.materialized_view_candidate_rows,
+		    g_state.materialized_view_key_positions, context, g_state.materialized_view_rows_added,
+		    g_state.materialized_view_rows_removed, g_state.materialized_view_rows_changed);
+	}
 	auto &table = g_state.table;
 	auto &data_table = g_state.table.GetStorage();
 	auto &memory_manager = g_state.memory_manager;

@@ -2,6 +2,7 @@
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/common/types/column/column_data_scan_states.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -10,9 +11,6 @@
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/connection.hpp"
-#include "duckdb/main/database.hpp"
-#include "duckdb/main/materialized_query_result.hpp"
 #include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/parallel/executor_task.hpp"
 #include "duckdb/parallel/thread_context.hpp"
@@ -38,25 +36,113 @@ static idx_t NativeRefreshClockMillis() {
 	                              .count());
 }
 
-bool PhysicalInsert::EvaluateMaterializedViewLogicalDiff(ClientContext &context, const string &diff_query,
-                                                         int64_t &rows_added, int64_t &rows_removed,
-                                                         int64_t &rows_changed) {
-	if (diff_query.empty()) {
+struct MaterializedViewKeyLess {
+	bool operator()(const vector<Value> &left, const vector<Value> &right) const {
+		if (left.size() != right.size()) {
+			return left.size() < right.size();
+		}
+		for (idx_t i = 0; i < left.size(); i++) {
+			if (ValueOperations::DistinctLessThan(left[i], right[i])) {
+				return true;
+			}
+			if (ValueOperations::DistinctLessThan(right[i], left[i])) {
+				return false;
+			}
+		}
 		return false;
 	}
-	Connection connection(DatabaseInstance::GetDatabase(context));
-	auto result = connection.Query(diff_query);
-	if (result->HasError()) {
-		result->GetErrorObject().Throw("Failed to calculate materialized view logical refresh metrics");
+};
+
+using materialized_view_key_map_t = map<vector<Value>, idx_t, MaterializedViewKeyLess>;
+
+vector<vector<Value>> PhysicalInsert::SnapshotMaterializedViewRows(ClientContext &context, DuckTableEntry &table) {
+	vector<vector<Value>> rows;
+	auto &storage = table.GetStorage();
+	auto &transaction = DuckTransaction::Get(context, table.catalog);
+	auto types = table.GetTypes();
+	vector<StorageIndex> column_ids;
+	column_ids.reserve(types.size());
+	for (idx_t i = 0; i < types.size(); i++) {
+		column_ids.emplace_back(StorageIndex(i));
 	}
-	auto &materialized_result = result->Cast<MaterializedQueryResult>();
-	if (materialized_result.RowCount() != 1 || materialized_result.ColumnCount() != 3) {
-		throw InternalException("Materialized view logical refresh metrics must return one row and three columns");
+	TableScanState scan_state;
+	scan_state.Initialize(column_ids, context);
+	storage.InitializeScan(context, transaction, scan_state, column_ids);
+	DataChunk chunk;
+	chunk.Initialize(context, types);
+	while (true) {
+		storage.Scan(transaction, chunk, scan_state);
+		if (chunk.size() == 0) {
+			break;
+		}
+		chunk.Flatten();
+		for (idx_t row_idx = 0; row_idx < chunk.size(); row_idx++) {
+			vector<Value> row;
+			row.reserve(chunk.ColumnCount());
+			for (idx_t column_idx = 0; column_idx < chunk.ColumnCount(); column_idx++) {
+				row.push_back(chunk.GetValue(column_idx, row_idx));
+			}
+			rows.push_back(std::move(row));
+		}
+		chunk.Reset();
 	}
-	rows_added = materialized_result.GetValue<int64_t>(0, 0);
-	rows_removed = materialized_result.GetValue<int64_t>(1, 0);
-	rows_changed = materialized_result.GetValue<int64_t>(2, 0);
-	return true;
+	return rows;
+}
+
+void PhysicalInsert::CalculateMaterializedViewLogicalDiff(const vector<vector<Value>> &old_rows,
+                                                           const ColumnDataCollection &candidate_rows,
+                                                           const vector<idx_t> &key_positions, ClientContext &context,
+                                                           int64_t &rows_added, int64_t &rows_removed,
+                                                           int64_t &rows_changed) {
+	materialized_view_key_map_t old_by_key;
+	for (idx_t row_idx = 0; row_idx < old_rows.size(); row_idx++) {
+		vector<Value> key;
+		key.reserve(key_positions.size());
+		for (auto key_position : key_positions) {
+			key.push_back(old_rows[row_idx][key_position]);
+		}
+		old_by_key.emplace(std::move(key), row_idx);
+	}
+	vector<bool> old_matched(old_rows.size(), false);
+	rows_added = 0;
+	rows_removed = 0;
+	rows_changed = 0;
+	ColumnDataScanState scan_state;
+	candidate_rows.InitializeScan(scan_state);
+	DataChunk chunk;
+	chunk.Initialize(context, candidate_rows.Types());
+	while (candidate_rows.Scan(scan_state, chunk)) {
+		chunk.Flatten();
+		for (idx_t row_idx = 0; row_idx < chunk.size(); row_idx++) {
+			vector<Value> key;
+			key.reserve(key_positions.size());
+			for (auto key_position : key_positions) {
+				key.push_back(chunk.GetValue(key_position, row_idx));
+			}
+			auto old_match = old_by_key.find(key);
+			if (old_match == old_by_key.end()) {
+				rows_added++;
+				continue;
+			}
+			old_matched[old_match->second] = true;
+			for (idx_t column_idx = 0; column_idx < chunk.ColumnCount(); column_idx++) {
+				if (std::find(key_positions.begin(), key_positions.end(), column_idx) != key_positions.end()) {
+					continue;
+				}
+				if (!Value::NotDistinctFrom(old_rows[old_match->second][column_idx],
+				                           chunk.GetValue(column_idx, row_idx))) {
+					rows_changed++;
+					break;
+				}
+			}
+		}
+		chunk.Reset();
+	}
+	for (auto matched : old_matched) {
+		if (!matched) {
+			rows_removed++;
+		}
+	}
 }
 
 PhysicalInsert::PhysicalInsert(PhysicalPlan &physical_plan, vector<LogicalType> types_p, DuckTableEntry &table,
@@ -144,17 +230,26 @@ TableDeleteState &InsertLocalState::GetDeleteState(DataTable &table, TableCatalo
 
 unique_ptr<GlobalSinkState> PhysicalInsert::GetGlobalSinkState(ClientContext &context) const {
 	optional_ptr<DuckTableEntry> table;
-	int64_t rows_added = -1;
-	int64_t rows_removed = -1;
-	int64_t rows_changed = -1;
+	vector<vector<Value>> old_rows;
+	vector<idx_t> key_positions;
 	if (info) {
 		// CREATE TABLE AS
 		D_ASSERT(!insert_table);
 		auto &catalog = schema->catalog;
 		auto &create_info = info->base->Cast<CreateTableInfo>();
-		if (create_info.materialized_view && !create_info.materialized_view_skip_refresh) {
-			EvaluateMaterializedViewLogicalDiff(context, create_info.materialized_view_refresh_diff_query, rows_added,
-			                                          rows_removed, rows_changed);
+		if (create_info.materialized_view && !create_info.materialized_view_skip_refresh &&
+		    !create_info.materialized_view_refresh_key_positions.empty()) {
+			key_positions = create_info.materialized_view_refresh_key_positions;
+			if (!create_info.materialized_view_refresh_times.empty()) {
+				auto existing_entry = catalog.GetEntry(context, CatalogType::TABLE_ENTRY,
+				                                      create_info.GetQualifiedName().Schema(), create_info.GetTableName(),
+				                                      OnEntryNotFound::RETURN_NULL);
+				if (existing_entry && existing_entry->type == CatalogType::TABLE_ENTRY &&
+				    existing_entry->Cast<TableCatalogEntry>().IsDuckTable()) {
+					old_rows = SnapshotMaterializedViewRows(
+					    context, existing_entry->Cast<TableCatalogEntry>().Cast<DuckTableEntry>());
+				}
+			}
 		}
 		table = &catalog.CreateTable(catalog.GetCatalogTransaction(context), *schema.get_mutable(), *info)
 		             ->Cast<DuckTableEntry>();
@@ -167,9 +262,11 @@ unique_ptr<GlobalSinkState> PhysicalInsert::GetGlobalSinkState(ClientContext &co
 	if (info && info->base->Cast<CreateTableInfo>().materialized_view &&
 	    !info->base->Cast<CreateTableInfo>().materialized_view_skip_refresh) {
 		result->materialized_view_refresh_start_ms = NativeRefreshClockMillis();
-		result->materialized_view_rows_added = rows_added;
-		result->materialized_view_rows_removed = rows_removed;
-		result->materialized_view_rows_changed = rows_changed;
+		result->materialized_view_key_positions = std::move(key_positions);
+		result->materialized_view_old_rows = std::move(old_rows);
+		if (!result->materialized_view_key_positions.empty()) {
+			result->materialized_view_candidate_rows = make_uniq<ColumnDataCollection>(context, insert_types);
+		}
 	}
 	return std::move(result);
 }
@@ -664,6 +761,10 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &insert
 	auto &table = gstate.table;
 	auto &storage = table.GetStorage();
 	insert_chunk.Flatten();
+	if (gstate.materialized_view_candidate_rows) {
+		lock_guard<mutex> guard(gstate.materialized_view_diff_lock);
+		gstate.materialized_view_candidate_rows->Append(insert_chunk);
+	}
 
 	if (!parallel) {
 		idx_t updated_tuples = OnConflictHandling(table, context, gstate, lstate, insert_chunk);
@@ -820,6 +921,12 @@ private:
 SinkFinalizeType PhysicalInsert::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                           OperatorSinkFinalizeInput &input) const {
 	auto &gstate = input.global_state.Cast<InsertGlobalState>();
+	if (gstate.materialized_view_candidate_rows) {
+		CalculateMaterializedViewLogicalDiff(
+		    gstate.materialized_view_old_rows, *gstate.materialized_view_candidate_rows,
+		    gstate.materialized_view_key_positions, context, gstate.materialized_view_rows_added,
+		    gstate.materialized_view_rows_removed, gstate.materialized_view_rows_changed);
+	}
 	auto record_refresh_metrics = [&]() {
 		if (gstate.materialized_view_refresh_start_ms != DConstants::INVALID_INDEX) {
 			gstate.table.SetLastMaterializedViewRefreshMetrics(

@@ -39,6 +39,10 @@ public:
 	int64_t materialized_view_rows_added = -1;
 	int64_t materialized_view_rows_removed = -1;
 	int64_t materialized_view_rows_changed = -1;
+	vector<idx_t> materialized_view_key_positions;
+	vector<vector<Value>> materialized_view_old_rows;
+	unique_ptr<ColumnDataCollection> materialized_view_candidate_rows;
+	mutex materialized_view_diff_lock;
 	ColumnDataCollection return_collection;
 	//! Leftover thread-local collections (smaller than a row group) that are compacted and merged in Finalize.
 	vector<PhysicalIndex> unmerged_collections;
@@ -162,9 +166,11 @@ public:
 
 public:
 	static void GetInsertInfo(const BoundCreateTableInfo &info, vector<LogicalType> &insert_types);
-	static bool EvaluateMaterializedViewLogicalDiff(ClientContext &context, const string &diff_query,
-	                                               int64_t &rows_added, int64_t &rows_removed,
-	                                               int64_t &rows_changed);
+	static vector<vector<Value>> SnapshotMaterializedViewRows(ClientContext &context, DuckTableEntry &table);
+	static void CalculateMaterializedViewLogicalDiff(const vector<vector<Value>> &old_rows,
+	                                                 const ColumnDataCollection &candidate_rows,
+	                                                 const vector<idx_t> &key_positions, ClientContext &context,
+	                                                 int64_t &rows_added, int64_t &rows_removed, int64_t &rows_changed);
 
 protected:
 	void CombineExistingAndInsertTuples(DataChunk &result, DataChunk &scan_chunk, DataChunk &input_chunk,
