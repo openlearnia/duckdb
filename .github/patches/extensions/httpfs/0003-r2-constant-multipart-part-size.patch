@@ -1,0 +1,16 @@
+diff --git a/src/s3/s3_upload_session.cpp b/src/s3/s3_upload_session.cpp
+index 8d8b4e7..a721c31 100644
+--- a/src/s3/s3_upload_session.cpp
++++ b/src/s3/s3_upload_session.cpp
+@@ -258,7 +258,10 @@ void S3UploadSession::WriteUnbufferedSpan(unique_ptr<BufferedPart> &buffered_par
+ 			D_ASSERT(copied == remaining);
+ 			return;
+ 		}
+-		auto direct_size = MinValue<idx_t>(remaining, S3UploadConfig::MAX_MULTIPART_PART_SIZE);
++		// Keep every non-trailing multipart part at the configured aggregation
++		// threshold. S3-compatible stores such as Cloudflare R2 reject a
++		// completion when non-trailing parts have different sizes.
++		auto direct_size = MinValue<idx_t>(remaining, config.aggregation_threshold);
+ 		UploadPart(data + input_offset, direct_size);
+ 		input_offset += direct_size;
+ 	}
