@@ -193,6 +193,10 @@ struct DuckDBMaterializedViewsFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct DuckDBMaterializedViewRefreshHistoryFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct DuckDBTableSample {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

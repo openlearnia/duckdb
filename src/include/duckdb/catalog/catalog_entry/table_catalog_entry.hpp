@@ -106,6 +106,12 @@ public:
 	DUCKDB_API const string &GetMaterializedViewRefreshMode() const {
 		return materialized_view_refresh_mode;
 	}
+	DUCKDB_API const vector<int64_t> &GetMaterializedViewRefreshTimes() const {
+		return materialized_view_refresh_times;
+	}
+	DUCKDB_API const vector<string> &GetMaterializedViewRefreshModes() const {
+		return materialized_view_refresh_modes;
+	}
 	DUCKDB_API bool MaterializedViewIsStale(ClientContext &context);
 
 	DUCKDB_API bool HasGeneratedColumns() const;
@@ -212,6 +218,8 @@ protected:
 	vector<idx_t> materialized_view_dependency_update_generations;
 	vector<idx_t> materialized_view_dependency_row_counts;
 	string materialized_view_refresh_mode;
+	vector<int64_t> materialized_view_refresh_times;
+	vector<string> materialized_view_refresh_modes;
 	//! A list of columns that are part of this table
 	ColumnList columns;
 	//! A list of constraints that are part of this table

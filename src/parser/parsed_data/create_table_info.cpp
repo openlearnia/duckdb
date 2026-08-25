@@ -50,6 +50,8 @@ unique_ptr<CreateInfo> CreateTableInfo::Copy() const {
 	result->materialized_view_dependency_update_generations = materialized_view_dependency_update_generations;
 	result->materialized_view_dependency_row_counts = materialized_view_dependency_row_counts;
 	result->materialized_view_refresh_mode = materialized_view_refresh_mode;
+	result->materialized_view_refresh_times = materialized_view_refresh_times;
+	result->materialized_view_refresh_modes = materialized_view_refresh_modes;
 	return std::move(result);
 }
 

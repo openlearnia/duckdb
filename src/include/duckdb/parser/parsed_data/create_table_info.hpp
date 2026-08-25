@@ -60,6 +60,8 @@ struct CreateTableInfo : public CreateInfo {
 	vector<idx_t> materialized_view_dependency_update_generations;
 	vector<idx_t> materialized_view_dependency_row_counts;
 	string materialized_view_refresh_mode = "full";
+	vector<int64_t> materialized_view_refresh_times;
+	vector<string> materialized_view_refresh_modes;
 
 public:
 	DUCKDB_API unique_ptr<CreateInfo> Copy() const override;

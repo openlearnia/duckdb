@@ -40,7 +40,13 @@ TableCatalogEntry::TableCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schem
       materialized_view_dependency_update_generations(std::move(info.materialized_view_dependency_update_generations)),
       materialized_view_dependency_row_counts(std::move(info.materialized_view_dependency_row_counts)),
       materialized_view_refresh_mode(std::move(info.materialized_view_refresh_mode)),
+      materialized_view_refresh_times(std::move(info.materialized_view_refresh_times)),
+      materialized_view_refresh_modes(std::move(info.materialized_view_refresh_modes)),
       catalog_materialized_view(info.catalog_materialized_view) {
+	if (materialized_view && materialized_view_refresh_times.empty()) {
+		materialized_view_refresh_times.push_back(Timestamp::GetCurrentTimestamp().value);
+		materialized_view_refresh_modes.push_back(materialized_view_refresh_mode);
+	}
 	this->temporary = info.temporary;
 	this->dependencies = info.dependencies;
 	this->comment = info.comment;
@@ -130,6 +136,8 @@ unique_ptr<CreateInfo> TableCatalogEntry::GetInfo() const {
 	result->materialized_view_dependency_update_generations = materialized_view_dependency_update_generations;
 	result->materialized_view_dependency_row_counts = materialized_view_dependency_row_counts;
 	result->materialized_view_refresh_mode = materialized_view_refresh_mode;
+	result->materialized_view_refresh_times = materialized_view_refresh_times;
+	result->materialized_view_refresh_modes = materialized_view_refresh_modes;
 	return std::move(result);
 }
 

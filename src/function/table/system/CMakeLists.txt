@@ -19,6 +19,7 @@ add_library_unity(
   duckdb_log.cpp
   duckdb_log_contexts.cpp
 	duckdb_materialized_views.cpp
+	duckdb_materialized_view_refresh_history.cpp
   duckdb_indexes.cpp
   duckdb_memory.cpp
   duckdb_eviction_queues.cpp
