@@ -13,4 +13,10 @@ class SelectStatement;
 bool TryBuildMaterializedViewIncrementalQuery(ClientContext &context, TableCatalogEntry &view,
                                               unique_ptr<SelectStatement> &query, string &refresh_mode);
 
+//! Builds a key-aware logical diff query for grouped native materialized views.
+//! Returns an empty string when the definition has no stable GROUP BY identity.
+string BuildMaterializedViewLogicalDiffQuery(const string &view_relation_sql, const string &original_sql,
+                                             const string &candidate_sql, const vector<string> &column_names,
+                                             bool has_previous_refresh);
+
 } // namespace duckdb

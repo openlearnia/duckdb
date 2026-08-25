@@ -86,6 +86,9 @@ public:
 	atomic<bool> optimistically_written;
 	idx_t minimum_memory_per_thread;
 	idx_t materialized_view_refresh_start_ms = DConstants::INVALID_INDEX;
+	int64_t materialized_view_rows_added = -1;
+	int64_t materialized_view_rows_removed = -1;
+	int64_t materialized_view_rows_changed = -1;
 
 	bool ReadyToMerge(const idx_t count) const;
 	void ScheduleMergeTasks(ClientContext &context, const idx_t min_batch_index);
@@ -332,10 +335,18 @@ void BatchInsertGlobalState::AddCollection(ClientContext &context, const idx_t b
 //===--------------------------------------------------------------------===//
 unique_ptr<GlobalSinkState> PhysicalBatchInsert::GetGlobalSinkState(ClientContext &context) const {
 	optional_ptr<DuckTableEntry> table;
+	int64_t rows_added = -1;
+	int64_t rows_removed = -1;
+	int64_t rows_changed = -1;
 	if (info) {
 		// CREATE TABLE AS
 		D_ASSERT(!insert_table);
 		auto &catalog = schema->catalog;
+		auto &create_info = info->base->Cast<CreateTableInfo>();
+		if (create_info.materialized_view && !create_info.materialized_view_skip_refresh) {
+			PhysicalInsert::EvaluateMaterializedViewLogicalDiff(
+			    context, create_info.materialized_view_refresh_diff_query, rows_added, rows_removed, rows_changed);
+		}
 		auto created_table = catalog.CreateTable(catalog.GetCatalogTransaction(context), *schema.get_mutable(), *info);
 		table = &created_table->Cast<DuckTableEntry>();
 	} else {
@@ -352,6 +363,9 @@ unique_ptr<GlobalSinkState> PhysicalBatchInsert::GetGlobalSinkState(ClientContex
 		result->materialized_view_refresh_start_ms = NumericCast<idx_t>(
 		    std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch())
 		        .count());
+		result->materialized_view_rows_added = rows_added;
+		result->materialized_view_rows_removed = rows_removed;
+		result->materialized_view_rows_changed = rows_changed;
 	}
 	return std::move(result);
 }
@@ -544,7 +558,8 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 			        .count());
 			g_state.table.SetLastMaterializedViewRefreshMetrics(
 			    NumericCast<int64_t>(now - g_state.materialized_view_refresh_start_ms),
-			    NumericCast<int64_t>(g_state.insert_count));
+			    NumericCast<int64_t>(g_state.insert_count), g_state.materialized_view_rows_added,
+			    g_state.materialized_view_rows_removed, g_state.materialized_view_rows_changed);
 		}
 	};
 

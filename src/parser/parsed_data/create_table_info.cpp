@@ -57,6 +57,7 @@ unique_ptr<CreateInfo> CreateTableInfo::Copy() const {
 	result->materialized_view_refresh_rows_added = materialized_view_refresh_rows_added;
 	result->materialized_view_refresh_rows_removed = materialized_view_refresh_rows_removed;
 	result->materialized_view_refresh_rows_changed = materialized_view_refresh_rows_changed;
+	result->materialized_view_refresh_diff_query = materialized_view_refresh_diff_query;
 	return std::move(result);
 }
 

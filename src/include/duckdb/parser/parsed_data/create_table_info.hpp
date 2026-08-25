@@ -67,6 +67,8 @@ struct CreateTableInfo : public CreateInfo {
 	vector<int64_t> materialized_view_refresh_rows_added;
 	vector<int64_t> materialized_view_refresh_rows_removed;
 	vector<int64_t> materialized_view_refresh_rows_changed;
+	//! Transient logical diff query evaluated before replacing a native MV.
+	string materialized_view_refresh_diff_query;
 
 public:
 	DUCKDB_API unique_ptr<CreateInfo> Copy() const override;

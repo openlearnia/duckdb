@@ -35,6 +35,10 @@ public:
 	idx_t insert_count;
 	//! Monotonic start time for native materialized-view refresh execution, or INVALID_INDEX.
 	idx_t materialized_view_refresh_start_ms = DConstants::INVALID_INDEX;
+	//! Logical row diff metrics computed before replacing a native MV, or -1 when unavailable.
+	int64_t materialized_view_rows_added = -1;
+	int64_t materialized_view_rows_removed = -1;
+	int64_t materialized_view_rows_changed = -1;
 	ColumnDataCollection return_collection;
 	//! Leftover thread-local collections (smaller than a row group) that are compacted and merged in Finalize.
 	vector<PhysicalIndex> unmerged_collections;
@@ -158,6 +162,9 @@ public:
 
 public:
 	static void GetInsertInfo(const BoundCreateTableInfo &info, vector<LogicalType> &insert_types);
+	static bool EvaluateMaterializedViewLogicalDiff(ClientContext &context, const string &diff_query,
+	                                               int64_t &rows_added, int64_t &rows_removed,
+	                                               int64_t &rows_changed);
 
 protected:
 	void CombineExistingAndInsertTuples(DataChunk &result, DataChunk &scan_chunk, DataChunk &input_chunk,

@@ -136,6 +136,89 @@ static unique_ptr<SelectStatement> ParseIncrementalQuery(const string &sql) {
 	return unique_ptr_cast<SQLStatement, SelectStatement>(std::move(parser.statements[0]));
 }
 
+string BuildMaterializedViewLogicalDiffQuery(const string &view_relation_sql, const string &original_sql,
+                                             const string &candidate_sql, const vector<string> &column_names,
+                                             bool has_previous_refresh) {
+	Parser parser;
+	parser.ParseQuery(original_sql);
+	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
+		return string();
+	}
+	auto statement = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(parser.statements[0]));
+	if (!statement->node || statement->node->type != QueryNodeType::SELECT_NODE) {
+		return string();
+	}
+	auto &node = statement->node->Cast<SelectNode>();
+	if (node.groups.group_expressions.empty() || column_names.size() != node.select_list.size()) {
+		return string();
+	}
+	vector<idx_t> key_positions;
+	for (auto &group : node.groups.group_expressions) {
+		bool found = false;
+		for (idx_t i = 0; i < node.select_list.size(); i++) {
+			if (ExpressionSQL(*group) == ExpressionSQL(*node.select_list[i])) {
+				key_positions.push_back(i);
+				found = true;
+				break;
+			}
+		}
+		if (!found) {
+			return string();
+		}
+	}
+
+	string columns;
+	for (idx_t i = 0; i < column_names.size(); i++) {
+		if (i > 0) {
+			columns += ", ";
+		}
+		columns += MVIdentifier(column_names[i]);
+	}
+	string old_select;
+	if (has_previous_refresh) {
+		old_select = StringUtil::Format("SELECT %s, TRUE AS __present FROM %s", columns, view_relation_sql);
+	} else {
+		old_select = StringUtil::Format("SELECT %s, TRUE AS __present FROM (%s) AS __empty_old WHERE FALSE",
+		                              columns, candidate_sql);
+	}
+	string new_select = StringUtil::Format("SELECT %s, TRUE AS __present FROM (%s) AS __candidate", columns,
+	                                      candidate_sql);
+
+	string join_condition;
+	for (auto key_position : key_positions) {
+		if (!join_condition.empty()) {
+			join_condition += " AND ";
+		}
+		join_condition += StringUtil::Format("__old.%s IS NOT DISTINCT FROM __new.%s",
+		                                    MVIdentifier(column_names[key_position]),
+		                                    MVIdentifier(column_names[key_position]));
+	}
+	string changed_condition;
+	for (idx_t i = 0; i < column_names.size(); i++) {
+		if (std::find(key_positions.begin(), key_positions.end(), i) != key_positions.end()) {
+			continue;
+		}
+		if (!changed_condition.empty()) {
+			changed_condition += " OR ";
+		}
+		changed_condition += StringUtil::Format("NOT (__old.%s IS NOT DISTINCT FROM __new.%s)",
+		                                      MVIdentifier(column_names[i]), MVIdentifier(column_names[i]));
+	}
+	if (changed_condition.empty()) {
+		changed_condition = "FALSE";
+	}
+	return StringUtil::Format(R"(
+WITH __old AS (%s),
+__new AS (%s)
+SELECT count(*) FILTER (WHERE __old.__present IS NULL),
+       count(*) FILTER (WHERE __new.__present IS NULL),
+       count(*) FILTER (WHERE __old.__present IS NOT NULL AND __new.__present IS NOT NULL
+                         AND (%s))
+FROM __old FULL OUTER JOIN __new ON %s
+)",
+	                          old_select, new_select, changed_condition, join_condition);
+}
+
 bool TryBuildMaterializedViewIncrementalQuery(ClientContext &context, TableCatalogEntry &view,
                                               unique_ptr<SelectStatement> &query, string &refresh_mode) {
 	TableCatalogEntry *dependency = nullptr;

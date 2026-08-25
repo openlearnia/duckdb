@@ -10,6 +10,9 @@
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/connection.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/main/materialized_query_result.hpp"
 #include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/parallel/executor_task.hpp"
 #include "duckdb/parallel/thread_context.hpp"
@@ -33,6 +36,27 @@ static idx_t NativeRefreshClockMillis() {
 	return NumericCast<idx_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
 	                              std::chrono::steady_clock::now().time_since_epoch())
 	                              .count());
+}
+
+bool PhysicalInsert::EvaluateMaterializedViewLogicalDiff(ClientContext &context, const string &diff_query,
+                                                         int64_t &rows_added, int64_t &rows_removed,
+                                                         int64_t &rows_changed) {
+	if (diff_query.empty()) {
+		return false;
+	}
+	Connection connection(DatabaseInstance::GetDatabase(context));
+	auto result = connection.Query(diff_query);
+	if (result->HasError()) {
+		result->GetErrorObject().Throw("Failed to calculate materialized view logical refresh metrics");
+	}
+	auto &materialized_result = result->Cast<MaterializedQueryResult>();
+	if (materialized_result.RowCount() != 1 || materialized_result.ColumnCount() != 3) {
+		throw InternalException("Materialized view logical refresh metrics must return one row and three columns");
+	}
+	rows_added = materialized_result.GetValue<int64_t>(0, 0);
+	rows_removed = materialized_result.GetValue<int64_t>(1, 0);
+	rows_changed = materialized_result.GetValue<int64_t>(2, 0);
+	return true;
 }
 
 PhysicalInsert::PhysicalInsert(PhysicalPlan &physical_plan, vector<LogicalType> types_p, DuckTableEntry &table,
@@ -120,10 +144,18 @@ TableDeleteState &InsertLocalState::GetDeleteState(DataTable &table, TableCatalo
 
 unique_ptr<GlobalSinkState> PhysicalInsert::GetGlobalSinkState(ClientContext &context) const {
 	optional_ptr<DuckTableEntry> table;
+	int64_t rows_added = -1;
+	int64_t rows_removed = -1;
+	int64_t rows_changed = -1;
 	if (info) {
 		// CREATE TABLE AS
 		D_ASSERT(!insert_table);
 		auto &catalog = schema->catalog;
+		auto &create_info = info->base->Cast<CreateTableInfo>();
+		if (create_info.materialized_view && !create_info.materialized_view_skip_refresh) {
+			EvaluateMaterializedViewLogicalDiff(context, create_info.materialized_view_refresh_diff_query, rows_added,
+			                                          rows_removed, rows_changed);
+		}
 		table = &catalog.CreateTable(catalog.GetCatalogTransaction(context), *schema.get_mutable(), *info)
 		             ->Cast<DuckTableEntry>();
 	} else {
@@ -135,6 +167,9 @@ unique_ptr<GlobalSinkState> PhysicalInsert::GetGlobalSinkState(ClientContext &co
 	if (info && info->base->Cast<CreateTableInfo>().materialized_view &&
 	    !info->base->Cast<CreateTableInfo>().materialized_view_skip_refresh) {
 		result->materialized_view_refresh_start_ms = NativeRefreshClockMillis();
+		result->materialized_view_rows_added = rows_added;
+		result->materialized_view_rows_removed = rows_removed;
+		result->materialized_view_rows_changed = rows_changed;
 	}
 	return std::move(result);
 }
@@ -789,7 +824,8 @@ SinkFinalizeType PhysicalInsert::Finalize(Pipeline &pipeline, Event &event, Clie
 		if (gstate.materialized_view_refresh_start_ms != DConstants::INVALID_INDEX) {
 			gstate.table.SetLastMaterializedViewRefreshMetrics(
 			    NumericCast<int64_t>(NativeRefreshClockMillis() - gstate.materialized_view_refresh_start_ms),
-			    NumericCast<int64_t>(gstate.insert_count));
+			    NumericCast<int64_t>(gstate.insert_count), gstate.materialized_view_rows_added,
+			    gstate.materialized_view_rows_removed, gstate.materialized_view_rows_changed);
 		}
 	};
 	if (gstate.unmerged_collections.empty()) {

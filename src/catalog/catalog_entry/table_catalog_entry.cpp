@@ -166,12 +166,17 @@ unique_ptr<CreateInfo> TableCatalogEntry::GetInfo() const {
 	return std::move(result);
 }
 
-void TableCatalogEntry::SetLastMaterializedViewRefreshMetrics(int64_t duration_ms, int64_t rows_written) {
+void TableCatalogEntry::SetLastMaterializedViewRefreshMetrics(int64_t duration_ms, int64_t rows_written,
+                                                              int64_t rows_added, int64_t rows_removed,
+                                                              int64_t rows_changed) {
 	if (!materialized_view || materialized_view_refresh_times.empty()) {
 		return;
 	}
 	materialized_view_refresh_durations.back() = duration_ms;
 	materialized_view_refresh_rows_written.back() = rows_written;
+	materialized_view_refresh_rows_added.back() = rows_added;
+	materialized_view_refresh_rows_removed.back() = rows_removed;
+	materialized_view_refresh_rows_changed.back() = rows_changed;
 }
 
 bool TableCatalogEntry::MaterializedViewIsStale(ClientContext &context) {

@@ -11,6 +11,7 @@
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/materialized_view_incremental.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/queue.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
@@ -687,6 +688,10 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 
 	vector<unique_ptr<BoundConstraint>> bound_constraints;
 	if (base.query) {
+		string materialized_view_candidate_sql;
+		if (base.materialized_view) {
+			materialized_view_candidate_sql = base.query->ToString();
+		}
 		// construct the result object
 		auto query_obj = Bind(*base.query);
 		base.query.reset();
@@ -722,6 +727,25 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 			for (idx_t i = 0; i < names.size(); i++) {
 				base.columns.AddColumn(ColumnDefinition(names[i], sql_types[i]));
 			}
+		}
+		if (base.materialized_view && !materialized_view_candidate_sql.empty()) {
+			vector<string> column_names;
+			for (auto &column : base.columns.Logical()) {
+				column_names.push_back(column.Name().GetIdentifierName());
+			}
+			auto qualified_name = base.GetQualifiedName();
+			auto catalog_name = qualified_name.Catalog().GetIdentifierName().empty()
+			                        ? schema.ParentCatalog().GetName().GetIdentifierName()
+			                        : qualified_name.Catalog().GetIdentifierName();
+			auto schema_name = qualified_name.Schema().GetIdentifierName().empty()
+			                     ? schema.name.GetIdentifierName()
+			                     : qualified_name.Schema().GetIdentifierName();
+			string view_relation_sql = StringUtil::Format(
+			    "%s.%s.%s", KeywordHelper::WriteQuoted(catalog_name, '"'), KeywordHelper::WriteQuoted(schema_name, '"'),
+			    KeywordHelper::WriteQuoted(qualified_name.Name().GetIdentifierName(), '"'));
+			base.materialized_view_refresh_diff_query = BuildMaterializedViewLogicalDiffQuery(
+			    view_relation_sql, base.materialized_view_query, materialized_view_candidate_sql, column_names,
+			    !base.materialized_view_refresh_times.empty());
 		}
 
 		// Bind all types
