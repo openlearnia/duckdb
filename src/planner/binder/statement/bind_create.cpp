@@ -907,6 +907,11 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			create_info.materialized_view_refresh_mode = "full";
 			create_info.materialized_view_refresh_times = table.GetMaterializedViewRefreshTimes();
 			create_info.materialized_view_refresh_modes = table.GetMaterializedViewRefreshModes();
+			create_info.materialized_view_refresh_durations = table.GetMaterializedViewRefreshDurations();
+			create_info.materialized_view_refresh_rows_written = table.GetMaterializedViewRefreshRowsWritten();
+			create_info.materialized_view_refresh_rows_added = table.GetMaterializedViewRefreshRowsAdded();
+			create_info.materialized_view_refresh_rows_removed = table.GetMaterializedViewRefreshRowsRemoved();
+			create_info.materialized_view_refresh_rows_changed = table.GetMaterializedViewRefreshRowsChanged();
 			create_info.materialized_view_refresh = false;
 			create_info.query = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(parser.statements[0]));
 			if (!create_info.materialized_view_skip_refresh) {
@@ -914,6 +919,11 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 				                                         create_info.materialized_view_refresh_mode);
 				create_info.materialized_view_refresh_times.push_back(Timestamp::GetCurrentTimestamp().value);
 				create_info.materialized_view_refresh_modes.push_back(create_info.materialized_view_refresh_mode);
+				create_info.materialized_view_refresh_durations.push_back(-1);
+				create_info.materialized_view_refresh_rows_written.push_back(-1);
+				create_info.materialized_view_refresh_rows_added.push_back(-1);
+				create_info.materialized_view_refresh_rows_removed.push_back(-1);
+				create_info.materialized_view_refresh_rows_changed.push_back(-1);
 			}
 		}
 		// Skip real catalog/schema resolution in EXTRACT_NAMES or EXTRACT_QUALIFIED_NAMES mode

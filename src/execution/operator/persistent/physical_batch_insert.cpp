@@ -14,6 +14,7 @@
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
+#include <chrono>
 
 namespace duckdb {
 
@@ -84,6 +85,7 @@ public:
 	idx_t next_start = 0;
 	atomic<bool> optimistically_written;
 	idx_t minimum_memory_per_thread;
+	idx_t materialized_view_refresh_start_ms = DConstants::INVALID_INDEX;
 
 	bool ReadyToMerge(const idx_t count) const;
 	void ScheduleMergeTasks(ClientContext &context, const idx_t min_batch_index);
@@ -345,6 +347,12 @@ unique_ptr<GlobalSinkState> PhysicalBatchInsert::GetGlobalSinkState(ClientContex
 	static constexpr const idx_t MINIMUM_MEMORY_PER_COLUMN = 4ULL * 1024ULL * 1024ULL;
 	auto minimum_memory_per_thread = table->GetColumns().PhysicalColumnCount() * MINIMUM_MEMORY_PER_COLUMN;
 	auto result = make_uniq<BatchInsertGlobalState>(context, *table, minimum_memory_per_thread);
+	if (info && info->base->Cast<CreateTableInfo>().materialized_view &&
+	    !info->base->Cast<CreateTableInfo>().materialized_view_skip_refresh) {
+		result->materialized_view_refresh_start_ms = NumericCast<idx_t>(
+		    std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch())
+		        .count());
+	}
 	return std::move(result);
 }
 
@@ -529,6 +537,16 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 	auto &table = g_state.table;
 	auto &data_table = g_state.table.GetStorage();
 	auto &memory_manager = g_state.memory_manager;
+	auto record_refresh_metrics = [&]() {
+		if (g_state.materialized_view_refresh_start_ms != DConstants::INVALID_INDEX) {
+			auto now = NumericCast<idx_t>(
+			    std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch())
+			        .count());
+			g_state.table.SetLastMaterializedViewRefreshMetrics(
+			    NumericCast<int64_t>(now - g_state.materialized_view_refresh_start_ms),
+			    NumericCast<int64_t>(g_state.insert_count));
+		}
+	};
 
 	if (g_state.optimistically_written || g_state.insert_count >= g_state.row_group_size) {
 		// we have written data to disk optimistically or are inserting a large amount of data
@@ -583,6 +601,7 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 		optimistic_writer.Merge(*writer);
 		optimistic_writer.FinalFlush();
 		memory_manager.FinalCheck();
+		record_refresh_metrics();
 		return SinkFinalizeType::READY;
 	}
 
@@ -608,6 +627,7 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 	g_state.collections.clear();
 	data_table.FinalizeLocalAppend(append_state);
 	memory_manager.FinalCheck();
+	record_refresh_metrics();
 	return SinkFinalizeType::READY;
 }
 

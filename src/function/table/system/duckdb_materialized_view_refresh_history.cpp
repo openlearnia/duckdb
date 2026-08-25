@@ -16,9 +16,14 @@ struct DuckDBMaterializedViewRefreshHistoryData : public GlobalTableFunctionStat
 static unique_ptr<FunctionData> DuckDBMaterializedViewRefreshHistoryBind(
     ClientContext &, TableFunctionBindInput &, vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names = {Identifier("database_name"), Identifier("schema_name"), Identifier("view_name"),
-	         Identifier("refresh_ordinal"), Identifier("refresh_time"), Identifier("refresh_mode")};
+	         Identifier("refresh_ordinal"), Identifier("refresh_time"), Identifier("refresh_mode"),
+	         Identifier("refresh_duration_ms"), Identifier("rows_written"), Identifier("rows_added"),
+	         Identifier("rows_removed"), Identifier("rows_changed"), Identifier("source_snapshot_time"),
+	         Identifier("lag_ms")};
 	return_types = {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::BIGINT,
-	                LogicalType::TIMESTAMP, LogicalType::VARCHAR};
+	                LogicalType::TIMESTAMP, LogicalType::VARCHAR, LogicalType::BIGINT, LogicalType::BIGINT,
+	                LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::TIMESTAMP,
+	                LogicalType::BIGINT};
 	return nullptr;
 }
 
@@ -61,6 +66,20 @@ static void DuckDBMaterializedViewRefreshHistoryFunction(ClientContext &, TableF
 		output.data[col++].Append(Value::BIGINT(NumericCast<int64_t>(data.refresh_index + 1)));
 		output.data[col++].Append(Value::TIMESTAMP(timestamp_t(times[data.refresh_index])));
 		output.data[col++].Append(Value(modes[data.refresh_index]));
+		auto append_metric = [&](const vector<int64_t> &metrics) {
+			if (data.refresh_index >= metrics.size() || metrics[data.refresh_index] < 0) {
+				output.data[col++].Append(Value());
+			} else {
+				output.data[col++].Append(Value::BIGINT(metrics[data.refresh_index]));
+			}
+		};
+		append_metric(view.GetMaterializedViewRefreshDurations());
+		append_metric(view.GetMaterializedViewRefreshRowsWritten());
+		append_metric(view.GetMaterializedViewRefreshRowsAdded());
+		append_metric(view.GetMaterializedViewRefreshRowsRemoved());
+		append_metric(view.GetMaterializedViewRefreshRowsChanged());
+		output.data[col++].Append(Value());
+		output.data[col++].Append(Value());
 		data.refresh_index++;
 		count++;
 	}

@@ -112,6 +112,22 @@ public:
 	DUCKDB_API const vector<string> &GetMaterializedViewRefreshModes() const {
 		return materialized_view_refresh_modes;
 	}
+	DUCKDB_API const vector<int64_t> &GetMaterializedViewRefreshDurations() const {
+		return materialized_view_refresh_durations;
+	}
+	DUCKDB_API const vector<int64_t> &GetMaterializedViewRefreshRowsWritten() const {
+		return materialized_view_refresh_rows_written;
+	}
+	DUCKDB_API const vector<int64_t> &GetMaterializedViewRefreshRowsAdded() const {
+		return materialized_view_refresh_rows_added;
+	}
+	DUCKDB_API const vector<int64_t> &GetMaterializedViewRefreshRowsRemoved() const {
+		return materialized_view_refresh_rows_removed;
+	}
+	DUCKDB_API const vector<int64_t> &GetMaterializedViewRefreshRowsChanged() const {
+		return materialized_view_refresh_rows_changed;
+	}
+	DUCKDB_API void SetLastMaterializedViewRefreshMetrics(int64_t duration_ms, int64_t rows_written);
 	DUCKDB_API bool MaterializedViewIsStale(ClientContext &context);
 
 	DUCKDB_API bool HasGeneratedColumns() const;
@@ -220,6 +236,11 @@ protected:
 	string materialized_view_refresh_mode;
 	vector<int64_t> materialized_view_refresh_times;
 	vector<string> materialized_view_refresh_modes;
+	vector<int64_t> materialized_view_refresh_durations;
+	vector<int64_t> materialized_view_refresh_rows_written;
+	vector<int64_t> materialized_view_refresh_rows_added;
+	vector<int64_t> materialized_view_refresh_rows_removed;
+	vector<int64_t> materialized_view_refresh_rows_changed;
 	//! A list of columns that are part of this table
 	ColumnList columns;
 	//! A list of constraints that are part of this table

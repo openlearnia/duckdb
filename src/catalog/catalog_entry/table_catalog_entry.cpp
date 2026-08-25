@@ -42,10 +42,30 @@ TableCatalogEntry::TableCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schem
       materialized_view_refresh_mode(std::move(info.materialized_view_refresh_mode)),
       materialized_view_refresh_times(std::move(info.materialized_view_refresh_times)),
       materialized_view_refresh_modes(std::move(info.materialized_view_refresh_modes)),
+      materialized_view_refresh_durations(std::move(info.materialized_view_refresh_durations)),
+      materialized_view_refresh_rows_written(std::move(info.materialized_view_refresh_rows_written)),
+      materialized_view_refresh_rows_added(std::move(info.materialized_view_refresh_rows_added)),
+      materialized_view_refresh_rows_removed(std::move(info.materialized_view_refresh_rows_removed)),
+      materialized_view_refresh_rows_changed(std::move(info.materialized_view_refresh_rows_changed)),
       catalog_materialized_view(info.catalog_materialized_view) {
 	if (materialized_view && materialized_view_refresh_times.empty()) {
 		materialized_view_refresh_times.push_back(Timestamp::GetCurrentTimestamp().value);
 		materialized_view_refresh_modes.push_back(materialized_view_refresh_mode);
+	}
+	while (materialized_view_refresh_durations.size() < materialized_view_refresh_times.size()) {
+		materialized_view_refresh_durations.push_back(-1);
+	}
+	while (materialized_view_refresh_rows_written.size() < materialized_view_refresh_times.size()) {
+		materialized_view_refresh_rows_written.push_back(-1);
+	}
+	while (materialized_view_refresh_rows_added.size() < materialized_view_refresh_times.size()) {
+		materialized_view_refresh_rows_added.push_back(-1);
+	}
+	while (materialized_view_refresh_rows_removed.size() < materialized_view_refresh_times.size()) {
+		materialized_view_refresh_rows_removed.push_back(-1);
+	}
+	while (materialized_view_refresh_rows_changed.size() < materialized_view_refresh_times.size()) {
+		materialized_view_refresh_rows_changed.push_back(-1);
 	}
 	this->temporary = info.temporary;
 	this->dependencies = info.dependencies;
@@ -138,7 +158,20 @@ unique_ptr<CreateInfo> TableCatalogEntry::GetInfo() const {
 	result->materialized_view_refresh_mode = materialized_view_refresh_mode;
 	result->materialized_view_refresh_times = materialized_view_refresh_times;
 	result->materialized_view_refresh_modes = materialized_view_refresh_modes;
+	result->materialized_view_refresh_durations = materialized_view_refresh_durations;
+	result->materialized_view_refresh_rows_written = materialized_view_refresh_rows_written;
+	result->materialized_view_refresh_rows_added = materialized_view_refresh_rows_added;
+	result->materialized_view_refresh_rows_removed = materialized_view_refresh_rows_removed;
+	result->materialized_view_refresh_rows_changed = materialized_view_refresh_rows_changed;
 	return std::move(result);
+}
+
+void TableCatalogEntry::SetLastMaterializedViewRefreshMetrics(int64_t duration_ms, int64_t rows_written) {
+	if (!materialized_view || materialized_view_refresh_times.empty()) {
+		return;
+	}
+	materialized_view_refresh_durations.back() = duration_ms;
+	materialized_view_refresh_rows_written.back() = rows_written;
 }
 
 bool TableCatalogEntry::MaterializedViewIsStale(ClientContext &context) {

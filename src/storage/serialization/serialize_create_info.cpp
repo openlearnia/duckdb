@@ -215,6 +215,16 @@ void CreateTableInfo::Serialize(Serializer &serializer) const {
 	                                                          materialized_view_refresh_times);
 	serializer.WritePropertyWithDefault<vector<string>>(220, "materialized_view_refresh_modes",
 	                                                   materialized_view_refresh_modes);
+	serializer.WritePropertyWithDefault<vector<int64_t>>(221, "materialized_view_refresh_durations",
+	                                                   materialized_view_refresh_durations);
+	serializer.WritePropertyWithDefault<vector<int64_t>>(222, "materialized_view_refresh_rows_written",
+	                                                   materialized_view_refresh_rows_written);
+	serializer.WritePropertyWithDefault<vector<int64_t>>(223, "materialized_view_refresh_rows_added",
+	                                                   materialized_view_refresh_rows_added);
+	serializer.WritePropertyWithDefault<vector<int64_t>>(224, "materialized_view_refresh_rows_removed",
+	                                                   materialized_view_refresh_rows_removed);
+	serializer.WritePropertyWithDefault<vector<int64_t>>(225, "materialized_view_refresh_rows_changed",
+	                                                   materialized_view_refresh_rows_changed);
 }
 
 unique_ptr<CreateInfo> CreateTableInfo::Deserialize(Deserializer &deserializer) {
@@ -246,7 +256,17 @@ unique_ptr<CreateInfo> CreateTableInfo::Deserialize(Deserializer &deserializer) 
 	deserializer.ReadPropertyWithDefault<vector<int64_t>>(219, "materialized_view_refresh_times",
                                                            result->materialized_view_refresh_times);
 	deserializer.ReadPropertyWithDefault<vector<string>>(220, "materialized_view_refresh_modes",
-                                                    result->materialized_view_refresh_modes);
+	                                                    result->materialized_view_refresh_modes);
+	deserializer.ReadPropertyWithDefault<vector<int64_t>>(221, "materialized_view_refresh_durations",
+	                                                     result->materialized_view_refresh_durations);
+	deserializer.ReadPropertyWithDefault<vector<int64_t>>(222, "materialized_view_refresh_rows_written",
+	                                                     result->materialized_view_refresh_rows_written);
+	deserializer.ReadPropertyWithDefault<vector<int64_t>>(223, "materialized_view_refresh_rows_added",
+	                                                     result->materialized_view_refresh_rows_added);
+	deserializer.ReadPropertyWithDefault<vector<int64_t>>(224, "materialized_view_refresh_rows_removed",
+	                                                     result->materialized_view_refresh_rows_removed);
+	deserializer.ReadPropertyWithDefault<vector<int64_t>>(225, "materialized_view_refresh_rows_changed",
+	                                                     result->materialized_view_refresh_rows_changed);
 	result->SetName(std::move(table));
 	return std::move(result);
 }

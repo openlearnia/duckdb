@@ -25,8 +25,15 @@
 #include "duckdb/storage/table/update_state.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/local_storage.hpp"
+#include <chrono>
 
 namespace duckdb {
+
+static idx_t NativeRefreshClockMillis() {
+	return NumericCast<idx_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+	                              std::chrono::steady_clock::now().time_since_epoch())
+	                              .count());
+}
 
 PhysicalInsert::PhysicalInsert(PhysicalPlan &physical_plan, vector<LogicalType> types_p, DuckTableEntry &table,
                                vector<unique_ptr<BoundConstraint>> bound_constraints_p,
@@ -125,6 +132,10 @@ unique_ptr<GlobalSinkState> PhysicalInsert::GetGlobalSinkState(ClientContext &co
 		table = insert_table.get_mutable();
 	}
 	auto result = make_uniq<InsertGlobalState>(context, GetTypes(), *table);
+	if (info && info->base->Cast<CreateTableInfo>().materialized_view &&
+	    !info->base->Cast<CreateTableInfo>().materialized_view_skip_refresh) {
+		result->materialized_view_refresh_start_ms = NativeRefreshClockMillis();
+	}
 	return std::move(result);
 }
 
@@ -774,7 +785,15 @@ private:
 SinkFinalizeType PhysicalInsert::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                           OperatorSinkFinalizeInput &input) const {
 	auto &gstate = input.global_state.Cast<InsertGlobalState>();
+	auto record_refresh_metrics = [&]() {
+		if (gstate.materialized_view_refresh_start_ms != DConstants::INVALID_INDEX) {
+			gstate.table.SetLastMaterializedViewRefreshMetrics(
+			    NumericCast<int64_t>(NativeRefreshClockMillis() - gstate.materialized_view_refresh_start_ms),
+			    NumericCast<int64_t>(gstate.insert_count));
+		}
+	};
 	if (gstate.unmerged_collections.empty()) {
+		record_refresh_metrics();
 		return SinkFinalizeType::READY;
 	}
 	auto &table = gstate.table;
@@ -795,6 +814,7 @@ SinkFinalizeType PhysicalInsert::Finalize(Pipeline &pipeline, Event &event, Clie
 		}
 		data_table.FinalizeLocalAppend(append_state);
 		gstate.unmerged_collections.clear();
+		record_refresh_metrics();
 		return SinkFinalizeType::READY;
 	}
 
@@ -821,6 +841,7 @@ SinkFinalizeType PhysicalInsert::Finalize(Pipeline &pipeline, Event &event, Clie
 	// compact the merge sets in parallel through a new pipeline event
 	auto merge_event = make_shared_ptr<MergeCollectionsEvent>(pipeline, context, *this, table, std::move(mergers));
 	event.InsertEvent(std::move(merge_event));
+	record_refresh_metrics();
 	return SinkFinalizeType::READY;
 }
 

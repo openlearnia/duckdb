@@ -62,6 +62,11 @@ struct CreateTableInfo : public CreateInfo {
 	string materialized_view_refresh_mode = "full";
 	vector<int64_t> materialized_view_refresh_times;
 	vector<string> materialized_view_refresh_modes;
+	vector<int64_t> materialized_view_refresh_durations;
+	vector<int64_t> materialized_view_refresh_rows_written;
+	vector<int64_t> materialized_view_refresh_rows_added;
+	vector<int64_t> materialized_view_refresh_rows_removed;
+	vector<int64_t> materialized_view_refresh_rows_changed;
 
 public:
 	DUCKDB_API unique_ptr<CreateInfo> Copy() const override;

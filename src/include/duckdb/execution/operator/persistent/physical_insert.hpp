@@ -33,6 +33,8 @@ public:
 	mutex lock;
 	DuckTableEntry &table;
 	idx_t insert_count;
+	//! Monotonic start time for native materialized-view refresh execution, or INVALID_INDEX.
+	idx_t materialized_view_refresh_start_ms = DConstants::INVALID_INDEX;
 	ColumnDataCollection return_collection;
 	//! Leftover thread-local collections (smaller than a row group) that are compacted and merged in Finalize.
 	vector<PhysicalIndex> unmerged_collections;
