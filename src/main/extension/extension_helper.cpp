@@ -444,6 +444,17 @@ void ExtensionHelper::AutoLoadExtension(DatabaseInstance &db, const string &exte
 static const char *const public_keys[] = {
     R"(
 -----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAogq8Dn7wiOkuY56tMs3l
+NC5mxTYd/nJt3t6kBML1MoG/Z5ftWAPPaQP7C8S8AbkVNeHQdGdL9fK4gTVLausH
+SQhzJ4jJmCsik2Kii778e3Z/L8Zr66OA0bht9XNsP4cReN+GVlDKKUcH61quh0gk
+yxn/INH5H0ofIg3vbhE7796irlFoQvQWYy0fjFTw1W+qV2RADeFxIsd+A1HLs6ip
+f7GUJht0DIBKJHjU92GDCvHS3Aj5akwf+Uwi5Oiua83BUZaNbY0SoPPJhRJnfuvA
+QKeL6ZwVOBLab6lV06gOvV5D/XCfOWI62aHcMxIvEF6zqwLWsGAVE0agFe0ejlHG
+wwIDAQAB
+-----END PUBLIC KEY-----
+)",
+    R"(
+-----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA6aZuHUa1cLR9YDDYaEfi
 UDbWY8m2t7b71S+k1ZkXfHqu+5drAxm+dIDzdOHOKZSIdwnJbT3sSqwFoG6PlXF3
 g3dsJjax5qESIhbVvf98nyipwNINxoyHCkcCIPkX17QP2xpnT7V59+CqcfDJXLqB

@@ -1,0 +1,25 @@
+diff --git a/src/quack_uri.cpp b/src/quack_uri.cpp
+index 0000000..0000000 100644
+--- a/src/quack_uri.cpp
++++ b/src/quack_uri.cpp
+@@ -76,11 +76,13 @@ static void QuackUriParser(const DataChunk &args, ExpressionState &, Vector &result) {
+ 
+ // just for testing
+ ScalarFunction QuackParseUriFunction::GetFunction() {
+-	return ScalarFunction("quack_uri_parser", {/* uri */ LogicalType::VARCHAR, /* ssl */ LogicalType::BOOLEAN},
+-	                      LogicalType::STRUCT({{"host", LogicalType::VARCHAR},
+-	                                           {"port", LogicalType::USMALLINT},
+-	                                           {"ipv6", LogicalType::BOOLEAN},
+-	                                           {"ssl", LogicalType::BOOLEAN},
+-	                                           {"url", LogicalType::VARCHAR}}),
+-	                      QuackUriParser);
++	auto result = ScalarFunction("quack_uri_parser", {/* uri */ LogicalType::VARCHAR, /* ssl */ LogicalType::BOOLEAN},
++	                            LogicalType::STRUCT({{"host", LogicalType::VARCHAR},
++	                                                 {"port", LogicalType::USMALLINT},
++	                                                 {"ipv6", LogicalType::BOOLEAN},
++	                                                 {"ssl", LogicalType::BOOLEAN},
++	                                                 {"url", LogicalType::VARCHAR}}),
++	                            QuackUriParser);
++	result.SetFallible();
++	return result;
+ }
