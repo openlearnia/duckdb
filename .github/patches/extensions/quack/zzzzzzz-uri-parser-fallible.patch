@@ -1,5 +1,4 @@
 diff --git a/src/quack_uri.cpp b/src/quack_uri.cpp
-index 0000000..0000000 100644
 --- a/src/quack_uri.cpp
 +++ b/src/quack_uri.cpp
 @@ -76,11 +76,13 @@ static void QuackUriParser(const DataChunk &args, ExpressionState &, Vector &result) {
