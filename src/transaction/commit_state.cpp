@@ -172,6 +172,7 @@ void CommitState::CommitEntryDrop(CatalogEntry &entry, data_ptr_t dataptr, Commi
 	case CatalogType::TYPE_ENTRY:
 	case CatalogType::MACRO_ENTRY:
 	case CatalogType::TABLE_MACRO_ENTRY:
+	case CatalogType::PROCEDURE_ENTRY:
 		if (entry.type == CatalogType::RENAMED_ENTRY || entry.type == parent.type) {
 			// ALTER statement, read the extra data after the entry
 			auto extra_data_size = Load<idx_t>(dataptr);
@@ -200,6 +201,7 @@ void CommitState::CommitEntryDrop(CatalogEntry &entry, data_ptr_t dataptr, Commi
 			case CatalogType::TYPE_ENTRY:
 			case CatalogType::MACRO_ENTRY:
 			case CatalogType::TABLE_MACRO_ENTRY:
+			case CatalogType::PROCEDURE_ENTRY:
 			case CatalogType::TRIGGER_ENTRY:
 				(void)column_name;
 				break;
@@ -215,6 +217,7 @@ void CommitState::CommitEntryDrop(CatalogEntry &entry, data_ptr_t dataptr, Commi
 			case CatalogType::TYPE_ENTRY:
 			case CatalogType::MACRO_ENTRY:
 			case CatalogType::TABLE_MACRO_ENTRY:
+			case CatalogType::PROCEDURE_ENTRY:
 			case CatalogType::TRIGGER_ENTRY:
 				break;
 			default:

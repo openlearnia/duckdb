@@ -4,6 +4,7 @@ DropEntries <-
 	DropTable /
 	DropTableFunction /
 	DropFunction /
+	DropProcedure /
 	DropSchema /
 	DropIndex /
 	DropSequence /
@@ -17,6 +18,7 @@ DropTrigger <- 'TRIGGER' IfExists? TriggerName 'ON' BaseTableName
 DropTable <- TableOrView IfExists? List(BaseTableName)
 DropTableFunction <- CommentMacroTable IfExists? List(TableFunctionName)
 DropFunction <- FunctionTypeMacro IfExists? List(FunctionIdentifier)
+DropProcedure <- 'PROCEDURE' IfExists? List(QualifiedName)
 DropSchema <- 'SCHEMA' IfExists? List(QualifiedName)
 DropIndex <- 'INDEX' IfExists? List(QualifiedIndexName)
 QualifiedIndexName <- CatalogReservedSchemaIndex / SchemaReservedIndex / QualifiedIndexNameString

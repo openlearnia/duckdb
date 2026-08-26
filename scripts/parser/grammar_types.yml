@@ -176,6 +176,7 @@ CreateStatement:
     - CreateTableStmt
     - CreateIndexStmt
     - CreateMacroStmt
+    - CreateProcedureStmt
     - CreateTypeStmt
     - CreateViewStmt
     - CreateTriggerStmt
@@ -195,6 +196,7 @@ DropStatement:
     - DropType
     - DropSecret
     - DropTrigger
+    - DropProcedure
 
 AlterInfo:
   type: "unique_ptr<AlterInfo>"
@@ -693,6 +695,7 @@ MacroParameterList:
   by_value: true
   rules:
     - MacroParameters
+    - ProcedureParameters
 
 StringList:
   type: "vector<string>"
@@ -935,6 +938,7 @@ MacroParameter:
     - MacroParameter
     - SimpleParameter
     - NamedParameter
+    - ProcedureParameter
 
 TriggerEventInfo:
   type: "TriggerEventInfo"

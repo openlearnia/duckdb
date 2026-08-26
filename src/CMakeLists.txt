@@ -90,6 +90,7 @@ endif()
 foreach(LINK_LIB ${DUCKDB_LINK_LIBS})
   list(APPEND LINK_OBJECTS $<TARGET_OBJECTS:${LINK_LIB}>)
 endforeach(LINK_LIB)
+list(APPEND LINK_OBJECTS $<TARGET_OBJECTS:qjs>)
 
 add_library(duckdb_static STATIC ${ALL_OBJECT_FILES} ${LINK_OBJECTS})
 target_link_libraries(duckdb_static PUBLIC ${DUCKDB_SYSTEM_LIBS})

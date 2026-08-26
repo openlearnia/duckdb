@@ -361,6 +361,54 @@
     }
   },
   {
+    "class": "CreateProcedureInfo",
+    "base": "CreateInfo",
+    "enum": [
+      "PROCEDURE_ENTRY"
+    ],
+    "includes": [
+      "duckdb/parser/parsed_data/create_procedure_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "name",
+        "serialize_property": "qualified_name.Name()",
+        "type": "Identifier"
+      },
+      {
+        "id": 201,
+        "name": "parameter_types",
+        "type": "vector<LogicalType>"
+      },
+      {
+        "id": 202,
+        "name": "parameter_names",
+        "type": "vector<string>"
+      },
+      {
+        "id": 203,
+        "name": "return_type",
+        "type": "LogicalType"
+      },
+      {
+        "id": 204,
+        "name": "language",
+        "type": "string"
+      },
+      {
+        "id": 205,
+        "name": "body",
+        "type": "string"
+      }
+    ],
+    "methods": {
+      "SetName": [
+        "name"
+      ]
+    }
+  },
+  {
     "class": "CreateSequenceInfo",
     "base": "CreateInfo",
     "enum": "SEQUENCE_ENTRY",

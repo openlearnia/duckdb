@@ -929,6 +929,12 @@ SimpleParameter <- TypeFuncName Type?
 ScalarMacroDefinition <- Expression
 TableMacroDefinition <- 'TABLE' SelectStatementInternal
 
+CreateProcedureStmt <- 'PROCEDURE' IfNotExists? QualifiedName Parens(ProcedureParameters?) 'RETURNS' Type 'LANGUAGE' Identifier 'AS' StringLiteral
+
+ProcedureParameters <- List(ProcedureParameter)
+
+ProcedureParameter <- ColId Type
+
 CreateSchemaStmt <- 'SCHEMA' IfNotExists? QualifiedName
 CreateSecretStmt <- 'SECRET' IfNotExists? SecretName? SecretStorageSpecifier? GenericCopyOptionList
 
@@ -959,7 +965,7 @@ MinValue <- 'MINVALUE'
 MaxValue <- 'MAXVALUE'
 
 CreateStatement <- 'CREATE' OrReplace? Temporary? CreateStatementVariation
-CreateStatementVariation <- CreateMaterializedViewStmt / CreateTableStmt / CreateMacroStmt / CreateSequenceStmt / CreateTypeStmt / CreateSchemaStmt / CreateViewStmt / CreateIndexStmt / CreateSecretStmt / CreateTriggerStmt
+CreateStatementVariation <- CreateMaterializedViewStmt / CreateTableStmt / CreateMacroStmt / CreateProcedureStmt / CreateSequenceStmt / CreateTypeStmt / CreateSchemaStmt / CreateViewStmt / CreateIndexStmt / CreateSecretStmt / CreateTriggerStmt
 CreateMaterializedViewStmt <- 'MATERIALIZED' 'VIEW' IfNotExists? QualifiedName 'AS' Statement
 OrReplace <- 'OR' 'REPLACE'
 Temporary <- Persistent / TempPersistent / TemporaryPersistent
@@ -1150,6 +1156,7 @@ DropEntries <-
 	DropTable /
 	DropTableFunction /
 	DropFunction /
+	DropProcedure /
 	DropSchema /
 	DropIndex /
 	DropSequence /
@@ -1163,6 +1170,7 @@ DropTrigger <- 'TRIGGER' IfExists? TriggerName 'ON' BaseTableName
 DropTable <- TableOrView IfExists? List(BaseTableName)
 DropTableFunction <- CommentMacroTable IfExists? List(TableFunctionName)
 DropFunction <- FunctionTypeMacro IfExists? List(FunctionIdentifier)
+DropProcedure <- 'PROCEDURE' IfExists? List(QualifiedName)
 DropSchema <- 'SCHEMA' IfExists? List(QualifiedName)
 DropIndex <- 'INDEX' IfExists? List(QualifiedIndexName)
 QualifiedIndexName <- CatalogReservedSchemaIndex / SchemaReservedIndex / QualifiedIndexNameString

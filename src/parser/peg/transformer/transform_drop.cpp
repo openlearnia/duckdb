@@ -77,6 +77,21 @@ PEGTransformerFactory::TransformDropFunction(PEGTransformer &transformer, const 
 	return result;
 }
 
+unique_ptr<DropStatement> PEGTransformerFactory::TransformDropProcedure(PEGTransformer &transformer,
+                                                                        const optional<bool> &if_exists,
+                                                                        const vector<QualifiedName> &qualified_name) {
+	auto result = make_uniq<DropStatement>();
+	auto info = make_uniq<DropInfo>();
+	if (qualified_name.size() > 1) {
+		throw NotImplementedException("Can only drop one object at a time");
+	}
+	info->SetQualifiedName(qualified_name[0]);
+	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
+	info->type = CatalogType::PROCEDURE_ENTRY;
+	result->info = std::move(info);
+	return result;
+}
+
 unique_ptr<DropStatement> PEGTransformerFactory::TransformDropSchema(PEGTransformer &transformer,
                                                                      const optional<bool> &if_exists,
                                                                      const vector<QualifiedName> &qualified_name) {

@@ -8,6 +8,7 @@
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/pragma_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/procedure_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
@@ -31,6 +32,7 @@
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_procedure_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
@@ -78,6 +80,7 @@ DuckSchemaEntry::DuckSchemaEntry(Catalog &catalog, CreateSchemaInfo &info,
                       catalog.IsSystemCatalog() ? make_uniq<DefaultTableFunctionGenerator>(catalog, *this) : nullptr),
       copy_functions(catalog), pragma_functions(catalog),
       functions(catalog, catalog.IsSystemCatalog() ? make_uniq<DefaultFunctionGenerator>(catalog, *this) : nullptr),
+      procedures(catalog),
       sequences(catalog), collations(catalog), types(catalog, make_uniq<DefaultTypeGenerator>(catalog, *this)),
       coordinate_systems(
           catalog, catalog.IsSystemCatalog() ? make_uniq<DefaultCoordinateSystemGenerator>(catalog, *this) : nullptr) {
@@ -244,6 +247,10 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateFunction(CatalogTransaction tr
 	case CatalogType::TABLE_MACRO_ENTRY:
 		// create a macro table function
 		function = make_uniq_base<StandardEntry, TableMacroCatalogEntry>(catalog, *this, info.Cast<CreateMacroInfo>());
+		break;
+	case CatalogType::PROCEDURE_ENTRY:
+		// create a stored procedure
+		function = make_uniq_base<StandardEntry, ProcedureCatalogEntry>(catalog, *this, info.Cast<CreateProcedureInfo>());
 		break;
 	case CatalogType::AGGREGATE_FUNCTION_ENTRY:
 		D_ASSERT(info.type == CatalogType::AGGREGATE_FUNCTION_ENTRY);
@@ -449,6 +456,8 @@ CatalogSet &DuckSchemaEntry::GetCatalogSet(CatalogType type) {
 	case CatalogType::MACRO_ENTRY:
 	case CatalogType::WINDOW_FUNCTION_ENTRY:
 		return functions;
+	case CatalogType::PROCEDURE_ENTRY:
+		return procedures;
 	case CatalogType::SEQUENCE_ENTRY:
 		return sequences;
 	case CatalogType::COLLATION_ENTRY:

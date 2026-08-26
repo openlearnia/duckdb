@@ -23,6 +23,7 @@
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
+#include "duckdb/parser/parsed_data/create_procedure_info.hpp"
 #include "duckdb/parser/parsed_data/create_trigger_info.hpp"
 #include "duckdb/parser/parsed_data/create_secret_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
@@ -855,6 +856,17 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		auto logical_create =
 		    make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_MACRO, std::move(stmt.info), &schema);
 		result.plan = std::move(logical_create);
+		break;
+	}
+	case CatalogType::PROCEDURE_ENTRY: {
+		auto &procedure = stmt.info->Cast<CreateProcedureInfo>();
+		for (auto &parameter_type : procedure.parameter_types) {
+			BindLogicalType(parameter_type);
+		}
+		BindLogicalType(procedure.return_type);
+		auto &schema = BindCreateSchema(*stmt.info);
+		result.plan =
+		    make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_MACRO, std::move(stmt.info), &schema);
 		break;
 	}
 	case CatalogType::INDEX_ENTRY: {

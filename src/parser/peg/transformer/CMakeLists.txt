@@ -17,6 +17,7 @@ add_library_unity(
   transform_copy.cpp
   transform_create_index.cpp
   transform_create_macro.cpp
+  transform_create_procedure.cpp
   transform_create_schema.cpp
   transform_create_sequence.cpp
   transform_create_secret.cpp

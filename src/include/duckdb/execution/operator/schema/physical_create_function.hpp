@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/execution/physical_operator.hpp"
-#include "duckdb/parser/parsed_data/create_macro_info.hpp"
+#include "duckdb/parser/parsed_data/create_function_info.hpp"
 
 namespace duckdb {
 
@@ -19,14 +19,14 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::CREATE_MACRO;
 
 public:
-	explicit PhysicalCreateFunction(PhysicalPlan &physical_plan, unique_ptr<CreateMacroInfo> info,
+	explicit PhysicalCreateFunction(PhysicalPlan &physical_plan, unique_ptr<CreateFunctionInfo> info,
 	                                idx_t estimated_cardinality)
 	    : PhysicalOperator(physical_plan, PhysicalOperatorType::CREATE_MACRO, {LogicalType::BIGINT},
 	                       estimated_cardinality),
 	      info(std::move(info)) {
 	}
 
-	unique_ptr<CreateMacroInfo> info;
+	unique_ptr<CreateFunctionInfo> info;
 
 public:
 	// Source interface

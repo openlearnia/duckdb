@@ -2342,6 +2342,51 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTableMacroDefin
 	return make_uniq<TypedTransformResult<unique_ptr<MacroFunction>>>(std::move(result));
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCreateProcedureStmtInternal(
+    PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	optional<bool> if_not_exists {};
+	auto &if_not_exists_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (if_not_exists_opt.HasResult()) {
+		auto if_not_exists_value = transformer.Transform<bool>(if_not_exists_opt.GetResult());
+		if_not_exists = if_not_exists_value;
+	}
+	auto qualified_name = transformer.Transform<QualifiedName>(list_pr.GetChild(2));
+	optional<vector<MacroParameter>> procedure_parameters {};
+	auto &procedure_parameters_opt = ExtractResultFromParens(list_pr.GetChild(3)).Cast<OptionalParseResult>();
+	if (procedure_parameters_opt.HasResult()) {
+		auto procedure_parameters_value = transformer.Transform<vector<MacroParameter>>(procedure_parameters_opt.GetResult());
+		procedure_parameters = std::move(procedure_parameters_value);
+	}
+	auto type = transformer.Transform<LogicalType>(list_pr.GetChild(5));
+	auto identifier = list_pr.GetChild(7).Cast<IdentifierParseResult>().identifier;
+	auto string_literal = transformer.Transform<string>(list_pr.GetChild(9));
+	auto result = TransformCreateProcedureStmt(transformer, if_not_exists, qualified_name, std::move(procedure_parameters), type, identifier, string_literal);
+	return make_uniq<TypedTransformResult<unique_ptr<CreateStatement>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformProcedureParametersInternal(
+    PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	vector<MacroParameter> procedure_parameter;
+	auto procedure_parameter_items = ExtractParseResultsFromList(list_pr.GetChild(0));
+	for (auto &procedure_parameter_item : procedure_parameter_items) {
+		auto procedure_parameter_value = transformer.Transform<MacroParameter>(procedure_parameter_item.get());
+		procedure_parameter.push_back(std::move(procedure_parameter_value));
+	}
+	auto result = std::move(procedure_parameter);
+	return make_uniq<TypedTransformResult<vector<MacroParameter>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformProcedureParameterInternal(
+    PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto col_id = transformer.Transform<Identifier>(list_pr.GetChild(0));
+	auto type = transformer.Transform<LogicalType>(list_pr.GetChild(1));
+	auto result = TransformProcedureParameter(transformer, col_id, type);
+	return make_uniq<TypedTransformResult<MacroParameter>>(std::move(result));
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCreateSchemaStmtInternal(
     PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -4053,6 +4098,25 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDropFunctionInt
 		function_identifier.push_back(function_identifier_value);
 	}
 	auto result = TransformDropFunction(transformer, function_type_macro, if_exists, function_identifier);
+	return make_uniq<TypedTransformResult<unique_ptr<DropStatement>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDropProcedureInternal(
+    PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	optional<bool> if_exists {};
+	auto &if_exists_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (if_exists_opt.HasResult()) {
+		auto if_exists_value = transformer.Transform<bool>(if_exists_opt.GetResult());
+		if_exists = if_exists_value;
+	}
+	vector<QualifiedName> qualified_name;
+	auto qualified_name_items = ExtractParseResultsFromList(list_pr.GetChild(2));
+	for (auto &qualified_name_item : qualified_name_items) {
+		auto qualified_name_value = transformer.Transform<QualifiedName>(qualified_name_item.get());
+		qualified_name.push_back(qualified_name_value);
+	}
+	auto result = TransformDropProcedure(transformer, if_exists, qualified_name);
 	return make_uniq<TypedTransformResult<unique_ptr<DropStatement>>>(std::move(result));
 }
 
@@ -10705,6 +10769,9 @@ void PEGTransformerFactory::RegisterGenerated() {
 		{"SimpleParameter", &PEGTransformerFactory::TransformSimpleParameterInternal},
 		{"ScalarMacroDefinition", &PEGTransformerFactory::TransformScalarMacroDefinitionInternal},
 		{"TableMacroDefinition", &PEGTransformerFactory::TransformTableMacroDefinitionInternal},
+		{"CreateProcedureStmt", &PEGTransformerFactory::TransformCreateProcedureStmtInternal},
+		{"ProcedureParameters", &PEGTransformerFactory::TransformProcedureParametersInternal},
+		{"ProcedureParameter", &PEGTransformerFactory::TransformProcedureParameterInternal},
 		{"CreateSchemaStmt", &PEGTransformerFactory::TransformCreateSchemaStmtInternal},
 		{"CreateSecretStmt", &PEGTransformerFactory::TransformCreateSecretStmtInternal},
 		{"SecretStorageSpecifier", &PEGTransformerFactory::TransformSecretStorageSpecifierInternal},
@@ -10865,6 +10932,7 @@ void PEGTransformerFactory::RegisterGenerated() {
 		{"DropTable", &PEGTransformerFactory::TransformDropTableInternal},
 		{"DropTableFunction", &PEGTransformerFactory::TransformDropTableFunctionInternal},
 		{"DropFunction", &PEGTransformerFactory::TransformDropFunctionInternal},
+		{"DropProcedure", &PEGTransformerFactory::TransformDropProcedureInternal},
 		{"DropSchema", &PEGTransformerFactory::TransformDropSchemaInternal},
 		{"DropIndex", &PEGTransformerFactory::TransformDropIndexInternal},
 		{"QualifiedIndexName", &PEGTransformerFactory::TransformQualifiedIndexNameInternal},

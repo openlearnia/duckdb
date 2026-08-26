@@ -957,6 +957,12 @@ public:
 	static unique_ptr<TransformResultValue> FinalizeScalarMacroDefinitionTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializeTableMacroDefinitionTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue> FinalizeTableMacroDefinitionTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeCreateProcedureStmtTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeCreateProcedureStmtTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeProcedureParametersTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeProcedureParametersTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeProcedureParameterTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeProcedureParameterTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializeCreateSchemaStmtTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue> FinalizeCreateSchemaStmtTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializeCreateSecretStmtTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
@@ -1279,6 +1285,8 @@ public:
 	static unique_ptr<TransformResultValue> FinalizeDropTableFunctionTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializeDropFunctionTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue> FinalizeDropFunctionTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeDropProcedureTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeDropProcedureTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializeDropSchemaTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue> FinalizeDropSchemaTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializeDropIndexTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
@@ -3003,6 +3011,12 @@ public:
 	static unique_ptr<MacroFunction> TransformScalarMacroDefinition(PEGTransformer &transformer, unique_ptr<ParsedExpression> expression);
 	static unique_ptr<TransformResultValue> TransformTableMacroDefinitionInternal(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<MacroFunction> TransformTableMacroDefinition(PEGTransformer &transformer, unique_ptr<SelectStatement> select_statement_internal);
+	static unique_ptr<TransformResultValue> TransformCreateProcedureStmtInternal(PEGTransformer &transformer, ParseResult &parse_result);
+	static unique_ptr<CreateStatement> TransformCreateProcedureStmt(PEGTransformer &transformer, const optional<bool> &if_not_exists, const QualifiedName &qualified_name, optional<vector<MacroParameter>> procedure_parameters, const LogicalType &type, const Identifier &identifier, const string &string_literal);
+	static unique_ptr<TransformResultValue> TransformProcedureParametersInternal(PEGTransformer &transformer, ParseResult &parse_result);
+	static vector<MacroParameter> TransformProcedureParameters(PEGTransformer &transformer, vector<MacroParameter> procedure_parameter);
+	static unique_ptr<TransformResultValue> TransformProcedureParameterInternal(PEGTransformer &transformer, ParseResult &parse_result);
+	static MacroParameter TransformProcedureParameter(PEGTransformer &transformer, const Identifier &col_id, const LogicalType &type);
 	static unique_ptr<TransformResultValue> TransformCreateSchemaStmtInternal(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<CreateStatement> TransformCreateSchemaStmt(PEGTransformer &transformer, const optional<bool> &if_not_exists, const QualifiedName &qualified_name);
 	static unique_ptr<TransformResultValue> TransformCreateSecretStmtInternal(PEGTransformer &transformer, ParseResult &parse_result);
@@ -3290,6 +3304,8 @@ public:
 	static unique_ptr<DropStatement> TransformDropTableFunction(PEGTransformer &transformer, const CatalogType &comment_macro_table, const optional<bool> &if_exists, const vector<Identifier> &table_function_name);
 	static unique_ptr<TransformResultValue> TransformDropFunctionInternal(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<DropStatement> TransformDropFunction(PEGTransformer &transformer, const bool &function_type_macro, const optional<bool> &if_exists, const vector<QualifiedName> &function_identifier);
+	static unique_ptr<TransformResultValue> TransformDropProcedureInternal(PEGTransformer &transformer, ParseResult &parse_result);
+	static unique_ptr<DropStatement> TransformDropProcedure(PEGTransformer &transformer, const optional<bool> &if_exists, const vector<QualifiedName> &qualified_name);
 	static unique_ptr<TransformResultValue> TransformDropSchemaInternal(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<DropStatement> TransformDropSchema(PEGTransformer &transformer, const optional<bool> &if_exists, const vector<QualifiedName> &qualified_name);
 	static unique_ptr<TransformResultValue> TransformDropIndexInternal(PEGTransformer &transformer, ParseResult &parse_result);

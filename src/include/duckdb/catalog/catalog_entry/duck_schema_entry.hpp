@@ -35,6 +35,8 @@ private:
 	CatalogSet pragma_functions;
 	//! The catalog set holding the scalar and aggregate functions
 	CatalogSet functions;
+	//! The catalog set holding stored procedures
+	CatalogSet procedures;
 	//! The catalog set holding the sequences
 	CatalogSet sequences;
 	//! The catalog set holding the collations

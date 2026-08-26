@@ -88,6 +88,7 @@ protected:
 	virtual void WriteSequence(SequenceCatalogEntry &table, Serializer &serializer);
 	virtual void WriteMacro(ScalarMacroCatalogEntry &table, Serializer &serializer);
 	virtual void WriteTableMacro(TableMacroCatalogEntry &table, Serializer &serializer);
+	virtual void WriteProcedure(ProcedureCatalogEntry &procedure, Serializer &serializer);
 	virtual void WriteIndex(IndexCatalogEntry &index_catalog_entry, Serializer &serializer);
 	virtual void WriteType(TypeCatalogEntry &type, Serializer &serializer);
 	virtual void WriteTrigger(TriggerCatalogEntry &trigger, Serializer &serializer);
@@ -112,6 +113,7 @@ protected:
 	virtual void ReadSequence(CatalogTransaction transaction, Deserializer &deserializer);
 	virtual void ReadMacro(CatalogTransaction transaction, Deserializer &deserializer);
 	virtual void ReadTableMacro(CatalogTransaction transaction, Deserializer &deserializer);
+	virtual void ReadProcedure(CatalogTransaction transaction, Deserializer &deserializer);
 	virtual void ReadIndex(CatalogTransaction transaction, Deserializer &deserializer);
 	virtual void ReadType(CatalogTransaction transaction, Deserializer &deserializer);
 	virtual void ReadTrigger(CatalogTransaction transaction, Deserializer &deserializer);

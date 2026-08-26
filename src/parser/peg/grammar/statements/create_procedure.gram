@@ -1,0 +1,5 @@
+CreateProcedureStmt <- 'PROCEDURE' IfNotExists? QualifiedName Parens(ProcedureParameters?) 'RETURNS' Type 'LANGUAGE' Identifier 'AS' StringLiteral
+
+ProcedureParameters <- List(ProcedureParameter)
+
+ProcedureParameter <- ColId Type

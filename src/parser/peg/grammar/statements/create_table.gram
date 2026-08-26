@@ -1,5 +1,5 @@
 CreateStatement <- 'CREATE' OrReplace? Temporary? CreateStatementVariation
-CreateStatementVariation <- CreateMaterializedViewStmt / CreateTableStmt / CreateMacroStmt / CreateSequenceStmt / CreateTypeStmt / CreateSchemaStmt / CreateViewStmt / CreateIndexStmt / CreateSecretStmt / CreateTriggerStmt
+CreateStatementVariation <- CreateMaterializedViewStmt / CreateTableStmt / CreateMacroStmt / CreateProcedureStmt / CreateSequenceStmt / CreateTypeStmt / CreateSchemaStmt / CreateViewStmt / CreateIndexStmt / CreateSecretStmt / CreateTriggerStmt
 CreateMaterializedViewStmt <- 'MATERIALIZED' 'VIEW' IfNotExists? QualifiedName 'AS' Statement
 OrReplace <- 'OR' 'REPLACE'
 Temporary <- Persistent / TempPersistent / TemporaryPersistent
