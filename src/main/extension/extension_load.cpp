@@ -414,7 +414,7 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 		direct_load = false;
 		string extension_name = ApplyExtensionAlias(extension);
 #ifdef WASM_LOADABLE_EXTENSIONS
-		string url_template = ExtensionUrlTemplate(&config, "");
+		string url_template = ExtensionUrlTemplate(&db, "");
 		string url = ExtensionFinalizeUrlTemplate(url_template, extension_name);
 
 		char *str = (char *)EM_ASM_PTR(
