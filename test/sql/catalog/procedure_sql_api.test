@@ -9,12 +9,99 @@ CREATE TABLE inventory(item VARCHAR, qty INTEGER);
 statement ok
 INSERT INTO inventory VALUES ('apple', 5), ('banana', 8);
 
+# ------------------------------------------------------------- async helpers
+
+statement ok
+CREATE TABLE async_values(value INTEGER);
+
+statement ok
+CREATE PROCEDURE async_insert_and_count()
+RETURNS INTEGER
+LANGUAGE JAVASCRIPT
+AS $$
+  await duckdb.execute('INSERT INTO async_values VALUES (1)');
+  const rows = await duckdb.query('SELECT count(*) AS n FROM async_values');
+  return rows[0].n;
+$$;
+
+query I
+CALL async_insert_and_count();
+----
+1
+
+statement ok
+CREATE PROCEDURE async_microtask()
+RETURNS INTEGER
+LANGUAGE JAVASCRIPT
+AS $$
+  const value = await Promise.resolve(41);
+  return value + 1;
+$$;
+
+query I
+CALL async_microtask();
+----
+42
+
+# SQL promises are serialized per invocation connection. Promise.all can submit a
+# batch without running two DuckDB queries concurrently.
+
+statement ok
+CREATE TABLE async_batch_values(value INTEGER);
+
+statement ok
+CREATE PROCEDURE async_batch()
+RETURNS INTEGER
+LANGUAGE JAVASCRIPT
+AS $$
+  const results = await Promise.all([
+    duckdb.execute('INSERT INTO async_batch_values VALUES (10)'),
+    duckdb.execute('INSERT INTO async_batch_values VALUES (20)'),
+    duckdb.query('SELECT count(*) AS n FROM async_batch_values')
+  ]);
+  return results[2][0].n;
+$$;
+
+query I
+CALL async_batch();
+----
+2
+
+query I
+SELECT sum(value) FROM async_batch_values;
+----
+30
+
+# An un-awaited operation is drained before the root procedure Promise is released.
+
+statement ok
+CREATE TABLE async_unawaited_values(value INTEGER);
+
+statement ok
+CREATE PROCEDURE async_unawaited_write()
+RETURNS INTEGER
+LANGUAGE JAVASCRIPT
+AS $$
+  duckdb.execute('INSERT INTO async_unawaited_values VALUES (7)');
+  return 7;
+$$;
+
+query I
+CALL async_unawaited_write();
+----
+7
+
+query I
+SELECT count(*) FROM async_unawaited_values;
+----
+1
+
 statement ok
 CREATE PROCEDURE top_item()
 RETURNS VARCHAR
 LANGUAGE JAVASCRIPT
 AS $$
-  const rows = duckdb.query('SELECT item, qty FROM inventory ORDER BY qty DESC');
+  const rows = await duckdb.query('SELECT item, qty FROM inventory ORDER BY qty DESC');
   if (!Array.isArray(rows)) { throw new Error('query did not return an array'); }
   if (rows.length !== 2) { throw new Error('expected 2 rows, got ' + rows.length); }
   return JSON.stringify(rows[0]);
@@ -38,7 +125,7 @@ CREATE PROCEDURE dump_notes()
 RETURNS VARCHAR
 LANGUAGE JAVASCRIPT
 AS $$
-  return JSON.stringify(duckdb.query('SELECT id, body FROM notes ORDER BY id'));
+  return JSON.stringify(await duckdb.query('SELECT id, body FROM notes ORDER BY id'));
 $$;
 
 query T
@@ -56,8 +143,8 @@ CREATE PROCEDURE first_event()
 RETURNS VARCHAR
 LANGUAGE JAVASCRIPT
 AS $$
-  duckdb.execute("INSERT INTO events VALUES ('2026-01-15', TRUE, 9.5, 18446744073709551615)");
-  const rows = duckdb.query('SELECT d, flag, score, tag FROM events ORDER BY d');
+  await duckdb.execute("INSERT INTO events VALUES ('2026-01-15', TRUE, 9.5, 18446744073709551615)");
+  const rows = await duckdb.query('SELECT d, flag, score, tag FROM events ORDER BY d');
   return JSON.stringify(rows[0]);
 $$;
 
@@ -76,8 +163,8 @@ CREATE PROCEDURE add_stock(item VARCHAR, amount INTEGER)
 RETURNS INTEGER
 LANGUAGE JAVASCRIPT
 AS $$
-  duckdb.execute('INSERT INTO inventory VALUES ($1, $2)', [item, amount]);
-  const rows = duckdb.query('SELECT count(*) AS n FROM inventory');
+  await duckdb.execute('INSERT INTO inventory VALUES ($1, $2)', [item, amount]);
+  const rows = await duckdb.query('SELECT count(*) AS n FROM inventory');
   return Number(rows[0].n);
 $$;
 
@@ -98,8 +185,8 @@ CREATE PROCEDURE log_event(day VARCHAR, score DOUBLE)
 RETURNS VARCHAR
 LANGUAGE JAVASCRIPT
 AS $$
-  duckdb.execute('INSERT INTO events VALUES ($1, FALSE, $2, 42)', [day, score]);
-  const rows = duckdb.query('SELECT d, score FROM events ORDER BY d DESC LIMIT 1');
+  await duckdb.execute('INSERT INTO events VALUES ($1, FALSE, $2, 42)', [day, score]);
+  const rows = await duckdb.query('SELECT d, score FROM events ORDER BY d DESC LIMIT 1');
   return JSON.stringify(rows[0]);
 $$;
 
@@ -115,7 +202,7 @@ CREATE PROCEDURE add_anonymous_note()
 RETURNS INTEGER
 LANGUAGE JAVASCRIPT
 AS $$
-  duckdb.execute('INSERT INTO notes VALUES ($1, $2)', [99, null]);
+  await duckdb.execute('INSERT INTO notes VALUES ($1, $2)', [99, null]);
   return 99;
 $$;
 
@@ -136,7 +223,7 @@ CREATE PROCEDURE replace_notes()
 RETURNS INTEGER
 LANGUAGE JAVASCRIPT
 AS $$
-  duckdb.execute("DELETE FROM notes; INSERT INTO notes VALUES (7, 'replaced')");
+  await duckdb.execute("DELETE FROM notes; INSERT INTO notes VALUES (7, 'replaced')");
   return 7;
 $$;
 
@@ -150,6 +237,269 @@ SELECT body FROM notes;
 ----
 replaced
 
+# ------------------------------------------------------ explicit transactions
+
+# A transaction callback groups multiple helper calls into one commit.
+
+statement ok
+CREATE TABLE transaction_values(value INTEGER);
+
+statement ok
+CREATE TABLE async_transaction_values(value INTEGER);
+
+statement ok
+CREATE PROCEDURE async_transaction_suspend()
+RETURNS INTEGER
+LANGUAGE JAVASCRIPT
+AS $$
+  await duckdb.transaction(async () => {
+    await duckdb.execute('INSERT INTO async_transaction_values VALUES (7)');
+    await Promise.resolve();
+    await duckdb.execute('INSERT INTO async_transaction_values VALUES (8)');
+  });
+  return (await duckdb.query('SELECT count(*) AS n FROM async_transaction_values'))[0].n;
+$$;
+
+query I
+CALL async_transaction_suspend();
+----
+2
+
+query I
+SELECT count(*) FROM async_transaction_values;
+----
+2
+
+statement ok
+CREATE PROCEDURE async_transaction_unawaited()
+RETURNS INTEGER
+LANGUAGE JAVASCRIPT
+AS $$
+  await duckdb.transaction(async () => {
+    duckdb.execute('INSERT INTO async_transaction_values VALUES (9)');
+  });
+  return (await duckdb.query('SELECT count(*) AS n FROM async_transaction_values'))[0].n;
+$$;
+
+query I
+CALL async_transaction_unawaited();
+----
+3
+
+query I
+SELECT count(*) FROM async_transaction_values;
+----
+3
+
+# Synchronous callbacks are also accepted; their queued work drains before commit.
+
+statement ok
+CREATE PROCEDURE sync_transaction_callback()
+RETURNS INTEGER
+LANGUAGE JAVASCRIPT
+AS $$
+  await duckdb.transaction(() => {
+    duckdb.execute('INSERT INTO async_transaction_values VALUES (10)');
+    return 10;
+  });
+  return (await duckdb.query('SELECT count(*) AS n FROM async_transaction_values'))[0].n;
+$$;
+
+query I
+CALL sync_transaction_callback();
+----
+4
+
+query I
+SELECT count(*) FROM async_transaction_values;
+----
+4
+
+# A rejected procedure closes queued work before the QuickJS runtime is torn down.
+
+statement ok
+CREATE TABLE async_cleanup_values(value INTEGER);
+
+statement ok
+CREATE PROCEDURE reject_with_queued_work()
+RETURNS INTEGER
+LANGUAGE JAVASCRIPT
+AS $$
+  try {
+    await duckdb.transaction(async () => {
+      const failure = duckdb.execute('SELECT * FROM missing_cleanup_table');
+      duckdb.execute('INSERT INTO async_cleanup_values VALUES (1)');
+      await failure;
+    });
+  } catch (e) {
+    return String(e.message).includes('missing_cleanup_table') ? 0 : -1;
+  }
+  return 1;
+$$;
+
+query I
+CALL reject_with_queued_work();
+----
+0
+
+query I
+SELECT count(*) FROM async_cleanup_values;
+----
+0
+
+statement ok
+CREATE PROCEDURE append_transactionally()
+RETURNS INTEGER
+LANGUAGE JAVASCRIPT
+AS $$
+  return await duckdb.transaction(async () => {
+    await duckdb.execute('INSERT INTO transaction_values VALUES (1)');
+    await duckdb.execute('INSERT INTO transaction_values VALUES (2)');
+    return (await duckdb.query('SELECT count(*) AS n FROM transaction_values'))[0].n;
+  });
+$$;
+
+query I
+CALL append_transactionally();
+----
+2
+
+query I
+SELECT count(*) FROM transaction_values;
+----
+2
+
+# A caught SQL error still invalidates the underlying DuckDB transaction. The
+# transaction API rolls the batch back instead of committing partial writes.
+
+statement ok
+CREATE PROCEDURE continue_after_caught_sql_error()
+RETURNS VARCHAR
+LANGUAGE JAVASCRIPT
+AS $$
+  try {
+    await duckdb.transaction(async () => {
+      await duckdb.execute('INSERT INTO transaction_values VALUES (5)');
+      try {
+        await duckdb.execute('SELECT * FROM missing_inside_transaction');
+      } catch (e) {
+        // DuckDB marks the transaction rollback-only after a statement error.
+      }
+      try {
+        await duckdb.execute('INSERT INTO transaction_values VALUES (6)');
+      } catch (e) {
+        // Further statements are rejected until the aborted transaction is rolled back.
+      }
+    });
+  } catch (e) {
+    return String(e.message).includes('missing_inside_transaction') ? 'transaction rolled back' : String(e.message);
+  }
+  return 'committed';
+$$;
+
+query T
+CALL continue_after_caught_sql_error();
+----
+transaction rolled back
+
+query I
+SELECT count(*) FROM transaction_values;
+----
+2
+
+# A thrown JavaScript error rolls back all writes in the callback.
+
+statement ok
+CREATE PROCEDURE rollback_transaction()
+RETURNS VARCHAR
+LANGUAGE JAVASCRIPT
+AS $$
+  try {
+    await duckdb.transaction(async () => {
+      await duckdb.execute('INSERT INTO transaction_values VALUES (3)');
+      throw new Error('abort transaction');
+    });
+  } catch (e) {
+    return String(e.message);
+  }
+  return 'no error';
+$$;
+
+query T
+CALL rollback_transaction();
+----
+abort transaction
+
+query I
+SELECT count(*) FROM transaction_values;
+----
+2
+
+# Calls outside a transaction remain independently auto-committed.
+
+statement ok
+CREATE PROCEDURE partial_commit_without_transaction()
+RETURNS VARCHAR
+LANGUAGE JAVASCRIPT
+AS $$
+  await duckdb.execute('INSERT INTO transaction_values VALUES (4)');
+  throw new Error('not atomic');
+$$;
+
+statement error
+CALL partial_commit_without_transaction();
+----
+not atomic
+
+query I
+SELECT count(*) FROM transaction_values;
+----
+3
+
+# Nested transaction callbacks are rejected until savepoint semantics exist.
+
+statement ok
+CREATE PROCEDURE nested_transaction()
+RETURNS VARCHAR
+LANGUAGE JAVASCRIPT
+AS $$
+  try {
+    await duckdb.transaction(async () => {
+      await duckdb.transaction(async () => {});
+    });
+  } catch (e) {
+    return String(e.message);
+  }
+  return 'no error';
+$$;
+
+query T
+CALL nested_transaction();
+----
+duckdb.transaction cannot be nested
+
+# Raw transaction statements cannot bypass the callback boundary.
+
+statement ok
+CREATE PROCEDURE raw_transaction_control()
+RETURNS VARCHAR
+LANGUAGE JAVASCRIPT
+AS $$
+  try {
+    await duckdb.transaction(async () => {
+      await duckdb.execute('SELECT 1; COMMIT');
+    });
+  } catch (e) {
+    return String(e.message).includes('must use duckdb.transaction') ? 'rejected' : String(e.message);
+  }
+  return 'accepted';
+$$;
+
+query T
+CALL raw_transaction_control();
+----
+rejected
+
 # --------------------------------------------------------------- error propagation
 
 # SQL errors surface as catchable JavaScript errors
@@ -160,7 +510,7 @@ RETURNS VARCHAR
 LANGUAGE JAVASCRIPT
 AS $$
   try {
-    duckdb.execute('SELECT * FROM no_such_table_xyz');
+    await duckdb.execute('SELECT * FROM no_such_table_xyz');
   } catch (e) {
     return String(e.message).includes('no_such_table_xyz') ? 'sql error surfaced' : ('unexpected: ' + e.message);
   }
@@ -179,7 +529,7 @@ CREATE PROCEDURE broken()
 RETURNS INTEGER
 LANGUAGE JAVASCRIPT
 AS $$
-  duckdb.execute('SELECT * FROM also_missing');
+  await duckdb.execute('SELECT * FROM also_missing');
   return 0;
 $$;
 
@@ -195,7 +545,7 @@ CREATE PROCEDURE syntax_error()
 RETURNS INTEGER
 LANGUAGE JAVASCRIPT
 AS $$
-  duckdb.execute('NOT VALID SQL AT ALL');
+  await duckdb.execute('NOT VALID SQL AT ALL');
   return 0;
 $$;
 
@@ -252,7 +602,7 @@ CREATE PROCEDURE recurse(n INTEGER)
 RETURNS INTEGER
 LANGUAGE JAVASCRIPT
 AS $$
-  duckdb.execute('CALL recurse(0)');
+  await duckdb.execute('CALL recurse(0)');
   return n;
 $$;
 
