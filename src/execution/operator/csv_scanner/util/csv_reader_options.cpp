@@ -111,7 +111,7 @@ void CSVReaderOptions::SetHeader(bool input) {
 }
 
 void CSVReaderOptions::SetCompression(const string &compression_p) {
-	this->compression = FileCompressionTypeFromString(compression_p);
+	this->compression = FileCompressionType(compression_p);
 }
 
 string CSVReaderOptions::GetEscape() const {
@@ -455,6 +455,11 @@ bool CSVReaderOptions::SetBaseOption(const Identifier &loption, const Value &val
 			}
 			if (!children) {
 				children = &ListValue::GetChildren(value);
+			}
+			if (children->empty()) {
+				throw BinderException("CSV Reader function option %s requires a non-empty list of possible null "
+				                      "strings (varchar) as input",
+				                      loption);
 			}
 			for (auto &child : *children) {
 				if (child.IsNull()) {

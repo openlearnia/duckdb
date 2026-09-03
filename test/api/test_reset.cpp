@@ -91,9 +91,9 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"file_search_path", {"test"}},
 	    {"force_compression", {"uncompressed", "uncompressed"}},
 	    {"home_directory", {"test"}},
-	    {"default_io_mode", {"MMAP"}},
 	    {"allow_extensions_metadata_mismatch", {"true"}},
 	    {"extension_directory", {"test"}},
+	    {"extension_repository_directory", {"test"}},
 	    {"extension_directories", {"[test]"}},
 	    {"max_expression_depth", {50}},
 	    {"write_buffer_row_group_memory_limit", {"4.0 GiB"}},
@@ -125,6 +125,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"enable_progress_bar_print", {false}},
 	    {"scalar_subquery_error_on_multiple_rows", {false}},
 	    {"ieee_floating_point_ops", {false}},
+	    {"null_on_division_by_zero", {true}},
 	    {"progress_bar_time", {0}},
 	    {"regex_match_operator_semantics", {"full"}},
 	    {"temp_directory", {"tmp"}},
@@ -152,7 +153,6 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"enable_caching_operators", {false}},
 	    {"enable_optimistic_write", {false}},
 	    {"enable_optimizer", {false}},
-	    {"parallelize_sequential_sources", {false}},
 	    {"initial_column_segment_size", {4096}},
 	    {"delim_join_as_cte", {false}}};
 	// Every option that's not excluded has to be part of this map
@@ -188,14 +188,16 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "search_path",
 	    "debug_window_mode",
 	    "experimental_parallel_csv",
-	    "lock_configuration",            // cant change this while db is running
-	    "disabled_filesystems",          // cant change this while db is running
-	    "enable_external_access",        // cant change this while db is running
-	    "allow_unsigned_extensions",     // cant change this while db is running
-	    "allow_community_extensions",    // cant change this while db is running
-	    "allow_unredacted_secrets",      // cant change this while db is running
-	    "disable_database_invalidation", // cant change this while db is running
-	    "vacuum_rebuild_indexes",        // cant change this while db is running
+	    "lock_configuration",             // cant change this while db is running
+	    "disabled_filesystems",           // cant change this while db is running
+	    "enable_external_access",         // cant change this while db is running
+	    "allow_unsigned_extensions",      // cant change this while db is running
+	    "allow_community_extensions",     // cant change this while db is running
+	    "allow_extension_repositories",   // can only be tightened at runtime, cannot be freely reset
+	    "extension_repository_directory", // trust anchor, cant change while db is running (unless unsigned allowed)
+	    "allow_unredacted_secrets",       // cant change this while db is running
+	    "disable_database_invalidation",  // cant change this while db is running
+	    "vacuum_rebuild_indexes",         // cant change this while db is running
 	    "temp_file_encryption",
 	    "enable_object_cache",
 	    "force_variant_shredding",
@@ -208,9 +210,6 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "external_threads", // tested in test_threads.cpp
 	    "profiling_output", // just an alias
 	    "duckdb_api",
-	    "configure_profiling",
-	    "configure_metrics",
-	    "custom_profiling_settings",
 	    "custom_user_agent",
 	    "default_block_size",
 	    "index_scan_percentage",
@@ -228,7 +227,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "debug_verification_mode",
 	    "standard_vector_size",
 	    "warnings_as_errors", // requires logging to be enabled
-	    "debug_transformer_trampoline_style",
+	    "debug_heap_based_parser",
 	    "block_allocator_memory"}; // cant reduce
 	return excluded_options.count(name) == 1;
 }

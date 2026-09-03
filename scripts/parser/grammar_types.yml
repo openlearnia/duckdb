@@ -108,6 +108,9 @@ SQLStatement:
     - RegisterExternalResourceStmt
     - DestroyExternalResourceStmt
     - ShowExternalResourcesStmt
+    - ExtensionRepositoryStatement
+    - CreateExtensionRepositoryStmt
+    - DropExtensionRepositoryStmt
 
 SelectStatement:
   type: "unique_ptr<SelectStatement>"
@@ -543,6 +546,7 @@ ColumnRefExpression:
   by_value: true
   rules:
     - NestedColumnName
+    - NestedSchemaTableColumnName
     - CatalogReservedSchemaTableColumnName
     - SchemaReservedTableColumnName
     - TableReservedColumnName
@@ -708,6 +712,7 @@ StringList:
     - DottedIdentifier
     - ColumnAliases
     - TriggerColumnList
+    - RepositoryPublicKey
     - StarSymbolColumnList
     - StarQualifierList
     - PivotGroupByList
@@ -1023,11 +1028,13 @@ String:
     - ColumnNameKeyword
     - FuncNameKeyword
     - TypeNameKeyword
+    - TypeFuncKeyword
     - IndexName
     - Identifier
     - ExportSource
     - ReservedKeyword
     - VersionNumber
+    - RepositoryPrefix
     - LikeVariations
     - LikeToken
     - ILikeToken
@@ -1158,6 +1165,7 @@ Bool:
     - IfNotExists
     - RefreshIfStale
     - OrReplace
+    - InstallAndLoad
     - ShowAllModifier
     - FunctionTypeMacro
     - FunctionTypeMacroKeyword
