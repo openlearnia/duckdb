@@ -6,7 +6,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/main/materialized_query_result.hpp"
+#include "duckdb/main/query_result.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "quickjs.h"
 
@@ -359,7 +359,7 @@ unique_ptr<QueryResult> ProcedureSqlApi::ExecuteOperation(ProcedureSqlOperation 
 		if (operation.bind_values.size() > prepared->GetExpectedParameterTypes().size()) {
 			throw InvalidInputException("too many bound parameters supplied");
 		}
-		return prepared->Execute(operation.bind_values, /*allow_stream_result=*/false);
+		return prepared->Execute(operation.bind_values);
 	}
 	return connection.Query(operation.sql);
 }
@@ -521,7 +521,7 @@ static JSValue QueryResultToJS(JSContext *js_context, QueryResult &result) {
 	if (result.GetResultType() != QueryResultType::MATERIALIZED_RESULT) {
 		throw InvalidInputException("SQL query did not produce a materialized result");
 	}
-	auto &materialized = static_cast<MaterializedQueryResult &>(result);
+	auto &materialized = result;
 	auto row_array = JS_NewArray(js_context);
 	if (JS_IsException(row_array)) {
 		throw InvalidInputException("%s", GetJSError(js_context));

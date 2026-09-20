@@ -41,7 +41,7 @@ BoundStatement Binder::Bind(CallStatement &stmt) {
 		result.names = {procedure.name};
 		result.types = {procedure.return_type};
 		result.plan = make_uniq<LogicalCallProcedure>(procedure, std::move(arguments));
-		GetStatementProperties().output_type = QueryResultOutputType::FORCE_MATERIALIZED;
+		GetStatementProperties().result_eagerness = ResultEagerness::FORCED;
 		return result;
 	}
 

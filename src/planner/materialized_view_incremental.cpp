@@ -156,8 +156,8 @@ vector<idx_t> GetMaterializedViewLogicalDiffKeyPositions(const string &original_
 	for (auto &group : node.groups.group_expressions) {
 		if (group->GetExpressionClass() == ExpressionClass::CONSTANT) {
 			auto &constant = group->Cast<ConstantExpression>();
-			if (constant.GetValue().type().IsIntegral()) {
-				auto select_index = constant.GetValue().GetValue<int64_t>();
+			int64_t select_index = 0;
+			if (constant.GetLiteral().TryGetInt64(select_index)) {
 				if (select_index >= 1 && NumericCast<idx_t>(select_index) <= node.select_list.size()) {
 					key_positions.push_back(NumericCast<idx_t>(select_index - 1));
 					continue;

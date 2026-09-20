@@ -1850,6 +1850,8 @@ struct MaterializedViewStaleReadSetting {
 	static constexpr const char *Description =
 	    "Behavior when querying a stale materialized view: allow, warn, or error";
 	static constexpr const char *InputType = "VARCHAR";
+	static constexpr bool IsDebug = false;
+	static constexpr bool IsDeprecated = false;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
