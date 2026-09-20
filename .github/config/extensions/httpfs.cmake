@@ -1,10 +1,9 @@
 duckdb_extension_load(httpfs
     LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb-httpfs
-    # Upstream pin (SigV4 moved into core). The multipart reimplementation on
-    # this pin emits constant-size non-trailing parts, which is what the R2
-    # multipart patch used to enforce; the patch was dropped in the
-    # v2.0-cyanoptera sync. Run a live R2 multipart write test before shipping.
-    GIT_TAG fafb14f2c899ddfd1998f8adf2e07fbbfd28b3fd
+    # Upstream pin (SigV4 moved into core). Re-pinned to upstream's
+    # v2.0-cyanoptera bump; the dropped R2 multipart patch stayed dropped, so
+    # run a live R2 multipart write test before shipping.
+    GIT_TAG 96a2f2e88e5dd075facbc5a65dc3afd67aa2bb44
     APPLY_PATCHES
 )

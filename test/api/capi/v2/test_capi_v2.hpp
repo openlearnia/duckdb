@@ -46,19 +46,34 @@ namespace test_capi_v2 {
 // Common Fixtures
 //----------------------------------------------------------------------------------------------------------------------
 
+//! Creates an instance handle under `env`, attaches `path` and makes it the default database, destroying the handle
+//! again if that fails.
+inline DUCKDB_V2_ERROR OpenInstance(duckdb_v2_environment_handle env, duckdb_v2_str path,
+                                    duckdb_v2_instance_handle *out_instance, duckdb_v2_error_info_handle *err) {
+	auto rc = duckdb_v2_instance_create(env, out_instance, err);
+	if (rc != DUCKDB_V2_ERROR_NONE) {
+		return rc;
+	}
+	rc = duckdb_v2_instance_attach(*out_instance, path, nullptr, nullptr, true, err);
+	if (rc != DUCKDB_V2_ERROR_NONE) {
+		duckdb_v2_instance_destroy(out_instance);
+	}
+	return rc;
+}
+
 struct EnvFixture {
 	duckdb_v2_environment_handle env = nullptr;
-	duckdb_v2_database_handle db = nullptr;
+	duckdb_v2_instance_handle instance = nullptr;
 	duckdb_v2_connection_handle conn = nullptr;
 	EnvFixture() {
-		duckdb_v2_create_environment(&env, nullptr);
-		duckdb_v2_open(env, duckdb_v2_str {nullptr, 0}, nullptr, 0, &db, nullptr);
-		duckdb_v2_connect(db, &conn, nullptr);
+		duckdb_v2_environment_create(&env, nullptr);
+		OpenInstance(env, duckdb_v2_str {nullptr, 0}, &instance, nullptr);
+		duckdb_v2_connection_create(instance, &conn, nullptr);
 	}
 	~EnvFixture() {
-		duckdb_v2_disconnect(&conn);
-		duckdb_v2_close(&db);
-		duckdb_v2_destroy_environment(&env);
+		duckdb_v2_connection_destroy(&conn);
+		duckdb_v2_instance_destroy(&instance);
+		duckdb_v2_environment_destroy(&env);
 	}
 };
 
@@ -657,10 +672,17 @@ inline duckdb_v2_logical_type_handle MakeType(duckdb_v2_connection_handle conn, 
 			name_views.push_back(Convert(n));
 		}
 	}
+	// The type name is a qualified name; an unqualified one is a single part.
+	duckdb_v2_identifier_t parts[1] = {Convert(name)};
+	duckdb_v2_qname_handle qname = nullptr;
+	DUCKDB_V2_ERROR rc = duckdb_v2_qname_create(parts, 1, &qname, nullptr);
 	duckdb_v2_logical_type_handle t = nullptr;
-	DUCKDB_V2_ERROR rc = duckdb_v2_connection_create_type_from_name(
-	    conn, Convert(name), names ? name_views.data() : nullptr, values.empty() ? nullptr : values.data(),
-	    values.size(), &t, nullptr);
+	if (rc == DUCKDB_V2_ERROR_NONE) {
+		rc = duckdb_v2_connection_create_type_from_name(conn, qname, names ? name_views.data() : nullptr,
+		                                                values.empty() ? nullptr : values.data(), values.size(), &t,
+		                                                nullptr);
+	}
+	duckdb_v2_qname_destroy(&qname);
 	for (auto &v : values) {
 		duckdb_v2_value_destroy(&v);
 	}
