@@ -18,7 +18,6 @@ from comparison import (
     sampling_batch_sizes,
 )
 
-
 print = functools.partial(print, flush=True)
 
 INITIAL_RUNS = 2 * SAMPLE_BATCH_SIZE
@@ -842,13 +841,11 @@ def report_geomean_regression(old_geomean: float, new_geomean: float, nofail: bo
 def print_failure_summary(failures: List[BenchmarkResult]):
     if not failures:
         return
-    print(
-        """\n
+    print("""\n
 ====================================================
 ================  FAILURES SUMMARY  ================
 ====================================================
-"""
-    )
+""")
     for index, result in enumerate(failures, start=1):
         print(f"{index}: {result.benchmark}")
         if result.old_failure != result.new_failure:

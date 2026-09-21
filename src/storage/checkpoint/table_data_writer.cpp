@@ -216,7 +216,7 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	    104, "index_storage_infos", index_storage_infos.ordered_infos.size(),
 	    [&](Serializer::List &list, idx_t i) { list.WriteElement(index_storage_infos.ordered_infos[i].get()); });
 	serializer.WritePropertyWithDefault<idx_t>(106, "modification_generation",
-	                                          table.GetStorage().GetModificationGeneration());
+	                                           table.GetStorage().GetModificationGeneration());
 	serializer.WritePropertyWithDefault<idx_t>(107, "append_generation", table.GetStorage().GetAppendGeneration());
 	serializer.WritePropertyWithDefault<idx_t>(108, "delete_generation", table.GetStorage().GetDeleteGeneration());
 	serializer.WritePropertyWithDefault<idx_t>(109, "update_generation", table.GetStorage().GetUpdateGeneration());

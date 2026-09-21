@@ -351,9 +351,9 @@ unique_ptr<GlobalSinkState> PhysicalBatchInsert::GetGlobalSinkState(ClientContex
 		    !create_info.materialized_view_refresh_key_positions.empty()) {
 			key_positions = create_info.materialized_view_refresh_key_positions;
 			if (!create_info.materialized_view_refresh_times.empty()) {
-				auto existing_entry = catalog.GetEntry(context, CatalogType::TABLE_ENTRY,
-				                                      create_info.GetQualifiedName().Schema(), create_info.GetTableName(),
-				                                      OnEntryNotFound::RETURN_NULL);
+				auto existing_entry =
+				    catalog.GetEntry(context, CatalogType::TABLE_ENTRY, create_info.GetQualifiedName().Schema(),
+				                     create_info.GetTableName(), OnEntryNotFound::RETURN_NULL);
 				if (existing_entry && existing_entry->type == CatalogType::TABLE_ENTRY &&
 				    existing_entry->Cast<TableCatalogEntry>().IsDuckTable()) {
 					old_rows = PhysicalInsert::SnapshotMaterializedViewRows(
@@ -579,9 +579,9 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 	auto &memory_manager = g_state.memory_manager;
 	auto record_refresh_metrics = [&]() {
 		if (g_state.materialized_view_refresh_start_ms != DConstants::INVALID_INDEX) {
-			auto now = NumericCast<idx_t>(
-			    std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch())
-			        .count());
+			auto now = NumericCast<idx_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+			                                  std::chrono::steady_clock::now().time_since_epoch())
+			                                  .count());
 			g_state.table.SetLastMaterializedViewRefreshMetrics(
 			    NumericCast<int64_t>(now - g_state.materialized_view_refresh_start_ms),
 			    NumericCast<int64_t>(g_state.insert_count), g_state.materialized_view_rows_added,

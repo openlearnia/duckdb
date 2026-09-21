@@ -33,8 +33,8 @@ BoundStatement Binder::Bind(CallStatement &stmt) {
 		for (idx_t i = 0; i < call_arguments.size(); i++) {
 			auto argument = call_arguments[i].GetExpression().Copy();
 			auto bound_argument = argument_binder.Bind(argument);
-			arguments.push_back(BoundCastExpression::AddCastToType(context, std::move(bound_argument),
-			                                                       procedure.parameter_types[i]));
+			arguments.push_back(
+			    BoundCastExpression::AddCastToType(context, std::move(bound_argument), procedure.parameter_types[i]));
 		}
 
 		BoundStatement result;

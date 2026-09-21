@@ -6,7 +6,6 @@ import argparse
 import lldb
 import shlex
 
-
 SQL_CURRENT_STATEMENT_COMMAND = "sql_current_statement"
 SQL_NEXT_STATEMENT_COMMAND = "sql_next_statement"
 SQL_NEXT_MATCHING_STATEMENT_COMMAND = "sql_next_matching_statement"

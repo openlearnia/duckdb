@@ -20,7 +20,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass
 from typing import Any, Dict, List, Optional, Sequence
 
-
 MAX_LOG_WORKERS = 8
 CCACHE_STEP_RE = re.compile(r"ccache", re.IGNORECASE)
 CCACHE_VERSION_RE = re.compile(r"\bccache version\s+(\S+)", re.IGNORECASE)

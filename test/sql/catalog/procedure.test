@@ -1,5 +1,6 @@
 # name: test/sql/catalog/procedure.test
 # description: JavaScript stored procedures are catalog objects invoked by CALL
+# group: [catalog]
 
 load {TEST_DIR}/procedure.db
 

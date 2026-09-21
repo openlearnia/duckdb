@@ -5,7 +5,6 @@ import os
 import subprocess
 import sys
 
-
 DEFAULT_BENCHMARK_DIRS = [
     "benchmark/imdb_plan_cost",
     "benchmark/tpch_plan_cost",

@@ -28,7 +28,8 @@ add_library_unity(
   physical_update_extensions.cpp
   physical_vacuum.cpp
   physical_verify_vector.cpp)
-target_include_directories(duckdb_operator_helper PRIVATE ${CMAKE_SOURCE_DIR}/third_party/quickjs-ng)
+target_include_directories(duckdb_operator_helper
+                           PRIVATE ${CMAKE_SOURCE_DIR}/third_party/quickjs-ng)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_operator_helper>
     PARENT_SCOPE)

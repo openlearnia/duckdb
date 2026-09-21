@@ -15,8 +15,8 @@ struct DuckDBMaterializedViewsData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> DuckDBMaterializedViewsBind(ClientContext &, TableFunctionBindInput &,
-	                                                         vector<LogicalType> &return_types,
-	                                                         vector<Identifier> &names) {
+                                                            vector<LogicalType> &return_types,
+                                                            vector<Identifier> &names) {
 	names.emplace_back("database_name");
 	names.emplace_back("schema_name");
 	names.emplace_back("view_name");
@@ -26,14 +26,20 @@ static unique_ptr<FunctionData> DuckDBMaterializedViewsBind(ClientContext &, Tab
 	names.emplace_back("current_dependency_generations");
 	names.emplace_back("is_stale");
 	names.emplace_back("last_refresh_mode");
-	return_types = {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR,
-	                LogicalType::LIST(LogicalType::VARCHAR), LogicalType::LIST(LogicalType::BIGINT),
-	                LogicalType::LIST(LogicalType::BIGINT), LogicalType::BOOLEAN, LogicalType::VARCHAR};
+	return_types = {LogicalType::VARCHAR,
+	                LogicalType::VARCHAR,
+	                LogicalType::VARCHAR,
+	                LogicalType::VARCHAR,
+	                LogicalType::LIST(LogicalType::VARCHAR),
+	                LogicalType::LIST(LogicalType::BIGINT),
+	                LogicalType::LIST(LogicalType::BIGINT),
+	                LogicalType::BOOLEAN,
+	                LogicalType::VARCHAR};
 	return nullptr;
 }
 
 static unique_ptr<GlobalTableFunctionState> DuckDBMaterializedViewsInit(ClientContext &context,
-                                                                       TableFunctionInitInput &) {
+                                                                        TableFunctionInitInput &) {
 	auto result = make_uniq<DuckDBMaterializedViewsData>();
 	// Do not walk every attached database here: that materializes all visible
 	// DuckLake schemas and can exhaust memory after a long mixed-catalog session.
@@ -74,13 +80,14 @@ static void DuckDBMaterializedViewsFunction(ClientContext &context, TableFunctio
 		// A partially restored catalog can contain mismatched dependency vectors.
 		// MaterializedViewIsStale treats that state as stale; keep introspection
 		// safe as well and only walk the entries that have a complete identity.
-		const auto dependency_count = MinValue(MinValue(catalogs.size(), schemas.size()),
-		                                      MinValue(tables.size(), generations.size()));
+		const auto dependency_count =
+		    MinValue(MinValue(catalogs.size(), schemas.size()), MinValue(tables.size(), generations.size()));
 		for (idx_t i = 0; i < dependency_count; i++) {
 			dependencies.push_back(Value(catalogs[i] + "." + schemas[i] + "." + tables[i]));
 			dependency_generations.push_back(Value::BIGINT(NumericCast<int64_t>(generations[i])));
-			EntryLookupInfo lookup(CatalogType::TABLE_ENTRY,
-			                       QualifiedName(Identifier(catalogs[i]), Identifier(schemas[i]), Identifier(tables[i])));
+			EntryLookupInfo lookup(
+			    CatalogType::TABLE_ENTRY,
+			    QualifiedName(Identifier(catalogs[i]), Identifier(schemas[i]), Identifier(tables[i])));
 			auto dependency = Catalog::GetEntry(context, lookup, OnEntryNotFound::RETURN_NULL);
 			if (!dependency || dependency->type != CatalogType::TABLE_ENTRY ||
 			    !dependency->Cast<TableCatalogEntry>().IsDuckTable()) {

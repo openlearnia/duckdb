@@ -12,8 +12,8 @@ static bool IsJavaScriptIdentifier(const string &name) {
 		return false;
 	}
 	auto is_identifier_start = [](char character) {
-		return (character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z') ||
-		       character == '_' || character == '$';
+		return (character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z') || character == '_' ||
+		       character == '$';
 	};
 	auto is_identifier_part = [&](char character) {
 		return is_identifier_start(character) || (character >= '0' && character <= '9');
@@ -67,8 +67,8 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateProcedureStmt(
 	return result;
 }
 
-MacroParameter PEGTransformerFactory::TransformProcedureParameter(PEGTransformer &transformer,
-                                                                  const Identifier &col_id, const LogicalType &type) {
+MacroParameter PEGTransformerFactory::TransformProcedureParameter(PEGTransformer &transformer, const Identifier &col_id,
+                                                                  const LogicalType &type) {
 	MacroParameter result;
 	result.name = col_id;
 	result.type = type;

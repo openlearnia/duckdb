@@ -91,7 +91,7 @@ static void CaptureMaterializedViewDependencies(ClientContext &context, LogicalO
 			auto view_name = base.GetQualifiedName();
 			if (!view_name.Catalog().empty() &&
 			    StringUtil::CIEquals(view_name.Catalog().GetIdentifierName(),
-			                        table->ParentCatalog().GetName().GetIdentifierName()) &&
+			                         table->ParentCatalog().GetName().GetIdentifierName()) &&
 			    StringUtil::CIEquals(view_name.Schema().GetIdentifierName(), table->schema.name.GetIdentifierName()) &&
 			    StringUtil::CIEquals(view_name.Name().GetIdentifierName(), table->name.GetIdentifierName())) {
 				return;
@@ -126,7 +126,8 @@ static void CaptureMaterializedViewDependencies(ClientContext &context, LogicalO
 				if (modification_type & static_cast<uint8_t>(TableModificationType::UPDATE)) {
 					update_generation++;
 				}
-				base.materialized_view_dependency_catalogs.push_back(table->ParentCatalog().GetName().GetIdentifierName());
+				base.materialized_view_dependency_catalogs.push_back(
+				    table->ParentCatalog().GetName().GetIdentifierName());
 				base.materialized_view_dependency_schemas.push_back(table->schema.name.GetIdentifierName());
 				base.materialized_view_dependency_tables.push_back(table->name.GetIdentifierName());
 				base.materialized_view_dependency_generations.push_back(generation);
@@ -734,8 +735,8 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 			for (auto &column : base.columns.Logical()) {
 				column_names.push_back(column.Name().GetIdentifierName());
 			}
-			base.materialized_view_refresh_key_positions = GetMaterializedViewLogicalDiffKeyPositions(
-			    base.materialized_view_query, column_names);
+			base.materialized_view_refresh_key_positions =
+			    GetMaterializedViewLogicalDiffKeyPositions(base.materialized_view_query, column_names);
 		}
 
 		// Bind all types

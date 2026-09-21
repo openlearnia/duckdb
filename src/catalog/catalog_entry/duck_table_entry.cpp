@@ -1517,7 +1517,8 @@ TableFunction DuckTableEntry::GetScanFunction(ClientContext &context, unique_ptr
 		auto mode = StringUtil::Lower(MaterializedViewStaleReadSetting::GetSetting(context).GetValue<string>());
 		if (mode == "error") {
 			throw InvalidInputException("Materialized view \"%s\" is stale - run REFRESH MATERIALIZED VIEW, or SET "
-			                            "materialized_view_stale_read='allow'", name);
+			                            "materialized_view_stale_read='allow'",
+			                            name);
 		}
 		if (mode == "warn") {
 			Printer::PrintF("WARNING: Materialized view \"%s\" is stale\n", name.c_str());

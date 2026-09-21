@@ -1,5 +1,6 @@
 # name: test/sql/catalog/procedure_sql_api.test
 # description: JavaScript stored procedures can run SQL through the injected duckdb helper
+# group: [catalog]
 
 # ---------------------------------------------------------------- query(): reads
 

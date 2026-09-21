@@ -1255,8 +1255,12 @@ if(NOT EXTENSION_CONFIG_BUILD)
   add_third_party(hyperloglog)
   add_third_party(mbedtls)
   add_third_party(miniz)
-  set(QJS_ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
-  set(QJS_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+  set(QJS_ENABLE_INSTALL
+      OFF
+      CACHE BOOL "" FORCE)
+  set(QJS_BUILD_EXAMPLES
+      OFF
+      CACHE BOOL "" FORCE)
   add_third_party(quickjs-ng)
   add_third_party(re2)
   add_third_party(skiplist)

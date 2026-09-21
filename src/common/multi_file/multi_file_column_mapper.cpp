@@ -628,14 +628,15 @@ static ColumnMapResult MapColumn(ClientContext &context, const MultiFileColumnDe
 }
 
 static unique_ptr<Expression> ConstructMapExpression(ClientContext &context, MultiFileLocalIndex local_idx,
-                                                      ColumnMapResult &mapping, const LogicalType &global_column_type,
-                                                      const LogicalType &local_column_type, bool is_trivially_mappable) {
+                                                     ColumnMapResult &mapping, const LogicalType &global_column_type,
+                                                     const LogicalType &local_column_type, bool is_trivially_mappable) {
 	unique_ptr<Expression> expr = make_uniq<BoundReferenceExpression>(local_column_type, local_idx.GetIndex());
 	if (global_column_type.id() == LogicalTypeId::STRUCT && local_column_type.id() == LogicalTypeId::STRUCT) {
 		bool has_common_member = false;
 		for (auto &global_child : StructType::GetChildTypes(global_column_type)) {
 			for (auto &local_child : StructType::GetChildTypes(local_column_type)) {
-				if (StringUtil::CIEquals(global_child.first.GetIdentifierName(), local_child.first.GetIdentifierName())) {
+				if (StringUtil::CIEquals(global_child.first.GetIdentifierName(),
+				                         local_child.first.GetIdentifierName())) {
 					has_common_member = true;
 					break;
 				}
@@ -662,7 +663,7 @@ static unique_ptr<Expression> ConstructMapExpression(ClientContext &context, Mul
 	const bool can_use_remap_struct =
 	    global_column_type.IsNested() &&
 	    (mapping.column_map.IsNull() || mapping.column_map.type().id() == LogicalTypeId::STRUCT) &&
-		!is_trivially_mappable && local_column_type.IsNested();
+	    !is_trivially_mappable && local_column_type.IsNested();
 	if (!can_use_remap_struct) {
 		// not a struct - potentially add a cast
 		if (local_column_type != global_column_type) {

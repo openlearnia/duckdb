@@ -29,8 +29,7 @@ constexpr const char *TableCatalogEntry::Name;
 
 TableCatalogEntry::TableCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info)
     : StandardEntry(CatalogType::TABLE_ENTRY, schema, catalog, info.GetTableName()),
-      materialized_view(info.materialized_view),
-      materialized_view_query(std::move(info.materialized_view_query)),
+      materialized_view(info.materialized_view), materialized_view_query(std::move(info.materialized_view_query)),
       materialized_view_dependency_catalogs(std::move(info.materialized_view_dependency_catalogs)),
       materialized_view_dependency_schemas(std::move(info.materialized_view_dependency_schemas)),
       materialized_view_dependency_tables(std::move(info.materialized_view_dependency_tables)),

@@ -4,7 +4,6 @@ import subprocess
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-
 BENCHMARK_DATA_DIRECTORY = "duckdb_benchmark_data"
 DEFAULT_PROCESS_TIMEOUT = 600
 DISABLED_RUNNER_TIMEOUT = 3600

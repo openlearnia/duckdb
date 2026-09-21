@@ -10,8 +10,9 @@
 
 namespace duckdb {
 
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformRefreshStatement(
-    PEGTransformer &transformer, const optional<bool> &refresh_if_stale, const QualifiedName &qualified_name) {
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformRefreshStatement(PEGTransformer &transformer,
+                                                                          const optional<bool> &refresh_if_stale,
+                                                                          const QualifiedName &qualified_name) {
 	auto result = make_uniq<CreateStatement>();
 	auto info = make_uniq<CreateTableInfo>(qualified_name);
 	info->materialized_view_refresh = true;

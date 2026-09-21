@@ -31,9 +31,9 @@
 namespace duckdb {
 
 static idx_t NativeRefreshClockMillis() {
-	return NumericCast<idx_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
-	                              std::chrono::steady_clock::now().time_since_epoch())
-	                              .count());
+	return NumericCast<idx_t>(
+	    std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch())
+	        .count());
 }
 
 struct MaterializedViewKeyLess {
@@ -90,10 +90,10 @@ vector<vector<Value>> PhysicalInsert::SnapshotMaterializedViewRows(ClientContext
 }
 
 void PhysicalInsert::CalculateMaterializedViewLogicalDiff(const vector<vector<Value>> &old_rows,
-                                                           const ColumnDataCollection &candidate_rows,
-                                                           const vector<idx_t> &key_positions, ClientContext &context,
-                                                           int64_t &rows_added, int64_t &rows_removed,
-                                                           int64_t &rows_changed) {
+                                                          const ColumnDataCollection &candidate_rows,
+                                                          const vector<idx_t> &key_positions, ClientContext &context,
+                                                          int64_t &rows_added, int64_t &rows_removed,
+                                                          int64_t &rows_changed) {
 	materialized_view_key_map_t old_by_key;
 	for (idx_t row_idx = 0; row_idx < old_rows.size(); row_idx++) {
 		vector<Value> key;
@@ -130,7 +130,7 @@ void PhysicalInsert::CalculateMaterializedViewLogicalDiff(const vector<vector<Va
 					continue;
 				}
 				if (!Value::NotDistinctFrom(old_rows[old_match->second][column_idx],
-				                           chunk.GetValue(column_idx, row_idx))) {
+				                            chunk.GetValue(column_idx, row_idx))) {
 					rows_changed++;
 					break;
 				}
@@ -241,9 +241,9 @@ unique_ptr<GlobalSinkState> PhysicalInsert::GetGlobalSinkState(ClientContext &co
 		    !create_info.materialized_view_refresh_key_positions.empty()) {
 			key_positions = create_info.materialized_view_refresh_key_positions;
 			if (!create_info.materialized_view_refresh_times.empty()) {
-				auto existing_entry = catalog.GetEntry(context, CatalogType::TABLE_ENTRY,
-				                                      create_info.GetQualifiedName().Schema(), create_info.GetTableName(),
-				                                      OnEntryNotFound::RETURN_NULL);
+				auto existing_entry =
+				    catalog.GetEntry(context, CatalogType::TABLE_ENTRY, create_info.GetQualifiedName().Schema(),
+				                     create_info.GetTableName(), OnEntryNotFound::RETURN_NULL);
 				if (existing_entry && existing_entry->type == CatalogType::TABLE_ENTRY &&
 				    existing_entry->Cast<TableCatalogEntry>().IsDuckTable()) {
 					old_rows = SnapshotMaterializedViewRows(

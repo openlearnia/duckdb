@@ -13,22 +13,31 @@ struct DuckDBMaterializedViewRefreshHistoryData : public GlobalTableFunctionStat
 	idx_t refresh_index = 0;
 };
 
-static unique_ptr<FunctionData> DuckDBMaterializedViewRefreshHistoryBind(
-    ClientContext &, TableFunctionBindInput &, vector<LogicalType> &return_types, vector<Identifier> &names) {
-	names = {Identifier("database_name"), Identifier("schema_name"), Identifier("view_name"),
-	         Identifier("refresh_ordinal"), Identifier("refresh_time"), Identifier("refresh_mode"),
-	         Identifier("refresh_duration_ms"), Identifier("rows_written"), Identifier("rows_added"),
-	         Identifier("rows_removed"), Identifier("rows_changed"), Identifier("source_snapshot_time"),
+static unique_ptr<FunctionData> DuckDBMaterializedViewRefreshHistoryBind(ClientContext &, TableFunctionBindInput &,
+                                                                         vector<LogicalType> &return_types,
+                                                                         vector<Identifier> &names) {
+	names = {Identifier("database_name"),
+	         Identifier("schema_name"),
+	         Identifier("view_name"),
+	         Identifier("refresh_ordinal"),
+	         Identifier("refresh_time"),
+	         Identifier("refresh_mode"),
+	         Identifier("refresh_duration_ms"),
+	         Identifier("rows_written"),
+	         Identifier("rows_added"),
+	         Identifier("rows_removed"),
+	         Identifier("rows_changed"),
+	         Identifier("source_snapshot_time"),
 	         Identifier("lag_ms")};
-	return_types = {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::BIGINT,
-	                LogicalType::TIMESTAMP, LogicalType::VARCHAR, LogicalType::BIGINT, LogicalType::BIGINT,
-	                LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::TIMESTAMP,
+	return_types = {LogicalType::VARCHAR,   LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::BIGINT,
+	                LogicalType::TIMESTAMP, LogicalType::VARCHAR, LogicalType::BIGINT,  LogicalType::BIGINT,
+	                LogicalType::BIGINT,    LogicalType::BIGINT,  LogicalType::BIGINT,  LogicalType::TIMESTAMP,
 	                LogicalType::BIGINT};
 	return nullptr;
 }
 
-static unique_ptr<GlobalTableFunctionState> DuckDBMaterializedViewRefreshHistoryInit(
-    ClientContext &context, TableFunctionInitInput &) {
+static unique_ptr<GlobalTableFunctionState> DuckDBMaterializedViewRefreshHistoryInit(ClientContext &context,
+                                                                                     TableFunctionInitInput &) {
 	auto result = make_uniq<DuckDBMaterializedViewRefreshHistoryData>();
 	auto database_name = DatabaseManager::GetDefaultDatabase(context);
 	auto database = DatabaseManager::Get(context).GetDatabase(database_name);
@@ -46,7 +55,7 @@ static unique_ptr<GlobalTableFunctionState> DuckDBMaterializedViewRefreshHistory
 }
 
 static void DuckDBMaterializedViewRefreshHistoryFunction(ClientContext &, TableFunctionInput &input,
-                                                          DataChunk &output) {
+                                                         DataChunk &output) {
 	auto &data = input.global_state->Cast<DuckDBMaterializedViewRefreshHistoryData>();
 	idx_t count = 0;
 	while (data.entry_index < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
@@ -89,8 +98,7 @@ static void DuckDBMaterializedViewRefreshHistoryFunction(ClientContext &, TableF
 void DuckDBMaterializedViewRefreshHistoryFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(TableFunction("duckdb_materialized_view_refresh_history", {},
 	                              DuckDBMaterializedViewRefreshHistoryFunction,
-	                              DuckDBMaterializedViewRefreshHistoryBind,
-	                              DuckDBMaterializedViewRefreshHistoryInit));
+	                              DuckDBMaterializedViewRefreshHistoryBind, DuckDBMaterializedViewRefreshHistoryInit));
 }
 
 } // namespace duckdb

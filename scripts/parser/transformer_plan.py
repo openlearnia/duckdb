@@ -5,7 +5,6 @@ from typing import List
 
 from inline_grammar import PEGTokenType
 
-
 # ---------------------------------------------------------------------------
 # Grammar AST - mirrors the Matcher class hierarchy in matcher.cpp
 # ---------------------------------------------------------------------------

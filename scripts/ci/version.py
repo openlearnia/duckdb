@@ -6,7 +6,6 @@ import re
 import subprocess
 from pathlib import Path
 
-
 RELEASE_VERSION_FILE = Path(__file__).with_name("release_version.txt")
 VERSION_PATTERN = re.compile(r"^v[0-9]+\.[0-9]+\.[0-9]+(?:-(?:alpha|rc|dev)[0-9]+)?$")
 

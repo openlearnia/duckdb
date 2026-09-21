@@ -49,7 +49,6 @@ from transformer_plan import (
     tokens_to_ast,
 )
 
-
 scripts_dir = Path(__file__).resolve().parents[1]
 src_dir = scripts_dir.parent / "src"
 statements_dir = src_dir / "parser" / "peg" / "grammar" / "statements"

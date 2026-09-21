@@ -3,7 +3,6 @@ import statistics
 from dataclasses import dataclass
 from typing import List
 
-
 CONFIRMATION_TARGET_SECONDS = 3.0
 MIN_CONFIRMATION_RUNS = 30
 MAX_CONFIRMATION_RUNS = 100

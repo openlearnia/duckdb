@@ -12,7 +12,6 @@ import subprocess
 import sys
 import time
 
-
 # Minimum amount of evenly sized filename chunks.
 TARGET_CHUNK_COUNT = 8
 # Upper bound on the files in a chunk. clangd-tidy never closes the files it opens, so clangd keeps a preamble on

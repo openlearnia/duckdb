@@ -31,8 +31,8 @@ static bool IsNestingLimitError(const string &message) {
 //! (C++ exception formatting, QuickJS error labelling) prepends its own tag. Reduce the
 //! collapsed message back to its core sentence before surfacing it.
 static string StripExceptionLabels(string message) {
-	static const char *const kLabels[] = {"InternalError: ", "Invalid Input Error: ", "Invalid Input Exception: ",
-	                                      "Catalog Error: ", "Parser Error: "};
+	static const char *const kLabels[] = {
+	    "InternalError: ", "Invalid Input Error: ", "Invalid Input Exception: ", "Catalog Error: ", "Parser Error: "};
 	bool stripped_any = true;
 	while (stripped_any) {
 		stripped_any = false;
@@ -672,7 +672,8 @@ static string AdvanceProcedureTransaction(JSContext *js_context, ProcedureSqlApi
 	}
 
 	if (api.transaction_callback_rejected || api.transaction_rollback_only) {
-		auto transaction_reason = api.transaction_error.empty() ? string("transaction is aborted") : api.transaction_error;
+		auto transaction_reason =
+		    api.transaction_error.empty() ? string("transaction is aborted") : api.transaction_error;
 		string rollback_error = RollbackProcedureTransaction(api);
 		api.transaction_phase = ProcedureTransactionPhase::ROLLED_BACK;
 		JSValue rejection = JS_UNDEFINED;
@@ -712,7 +713,8 @@ static string AdvanceProcedureTransaction(JSContext *js_context, ProcedureSqlApi
 		FreeTransactionValues(js_context, api);
 		return resolver_error;
 	} catch (...) {
-		auto error = AppendRollbackError("unknown error while committing transaction", RollbackProcedureTransaction(api));
+		auto error =
+		    AppendRollbackError("unknown error while committing transaction", RollbackProcedureTransaction(api));
 		api.transaction_phase = ProcedureTransactionPhase::ROLLED_BACK;
 		auto rejection = NewProcedureError(js_context, error);
 		auto resolver_error = RejectTransactionPromise(js_context, api, rejection);
@@ -782,7 +784,8 @@ static JSValue JsCallTransaction(JSContext *js_context, JSValueConst this_val, i
 		FreeTransactionValues(js_context, *api);
 		return promise;
 	} catch (...) {
-		auto error = AppendRollbackError("unknown error while executing transaction", RollbackProcedureTransaction(*api));
+		auto error =
+		    AppendRollbackError("unknown error while executing transaction", RollbackProcedureTransaction(*api));
 		api->transaction_phase = ProcedureTransactionPhase::ROLLED_BACK;
 		auto rejection = NewProcedureError(js_context, error);
 		string ignored;
@@ -822,8 +825,7 @@ static JSValue JsCallSqlApi(JSContext *js_context, JSValueConst this_val, int ar
 		if (argc >= 2 && !JS_IsNull(argv[1]) && !JS_IsUndefined(argv[1])) {
 			if (!JS_IsArray(argv[1])) {
 				JS_FreeCString(js_context, sql_chars);
-				return JS_ThrowTypeError(js_context,
-				                         "the parameters argument of %s must be an array",
+				return JS_ThrowTypeError(js_context, "the parameters argument of %s must be an array",
 				                         magic == 1 ? "duckdb.query" : "duckdb.execute");
 			}
 			auto length_value = JS_GetPropertyStr(js_context, argv[1], "length");
@@ -851,8 +853,8 @@ static JSValue JsCallSqlApi(JSContext *js_context, JSValueConst this_val, int ar
 				JS_FreeValue(js_context, element);
 				if (!success) {
 					JS_FreeCString(js_context, sql_chars);
-					return ThrowSqlError(js_context, StringUtil::Format(
-					    "failed to convert parameter %lld: %s", static_cast<long long>(i), error));
+					return ThrowSqlError(js_context, StringUtil::Format("failed to convert parameter %lld: %s",
+					                                                    static_cast<long long>(i), error));
 				}
 				bind_values.push_back(std::move(bind_value));
 			}
@@ -902,8 +904,7 @@ static JSValue JsCallSqlApi(JSContext *js_context, JSValueConst this_val, int ar
 
 //! Settle one worker completion on the QuickJS owner thread. Query-result conversion and
 //! transaction rollback bookkeeping intentionally happen here rather than in WorkerLoop.
-static string SettleSqlCompletion(JSContext *js_context, ProcedureSqlApi &api,
-                                  ProcedureSqlCompletion &completion) {
+static string SettleSqlCompletion(JSContext *js_context, ProcedureSqlApi &api, ProcedureSqlCompletion &completion) {
 	auto &operation = *completion.operation;
 	string error = completion.error;
 	JSValue value = JS_UNDEFINED;
@@ -995,7 +996,8 @@ static JSValue RunProcedurePromiseLoop(JSContext *js_context, ProcedureSqlApi &a
 		auto transaction_error = AdvanceProcedureTransaction(js_context, api);
 		if (!transaction_error.empty()) {
 			api.RequestClose();
-			throw InvalidInputException("JavaScript procedure transaction Promise settlement failed: %s", transaction_error);
+			throw InvalidInputException("JavaScript procedure transaction Promise settlement failed: %s",
+			                            transaction_error);
 		}
 
 		JSContext *job_context = nullptr;
@@ -1073,8 +1075,8 @@ static void RegisterSqlApi(JSContext *js_context) {
 
 PhysicalCallProcedure::PhysicalCallProcedure(PhysicalPlan &physical_plan, ProcedureCatalogEntry &procedure,
                                              vector<unique_ptr<Expression>> arguments, idx_t estimated_cardinality)
-	: PhysicalOperator(physical_plan, PhysicalOperatorType::EXTENSION, {procedure.return_type}, estimated_cardinality),
-	  procedure(procedure), arguments(std::move(arguments)) {
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::EXTENSION, {procedure.return_type}, estimated_cardinality),
+      procedure(procedure), arguments(std::move(arguments)) {
 }
 
 SourceResultType PhysicalCallProcedure::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
@@ -1083,10 +1085,9 @@ SourceResultType PhysicalCallProcedure::GetDataInternal(ExecutionContext &contex
 		return SourceResultType::FINISHED;
 	}
 	if (javascript_procedure_depth >= kMaxProcedureNesting) {
-		throw InvalidInputException(
-		    "JavaScript procedure %s (%d): procedures calling procedures "
-		    "(including indirectly through SQL) may not nest more than %d levels deep",
-		    kNestingErrorText, kMaxProcedureNesting, kMaxProcedureNesting);
+		throw InvalidInputException("JavaScript procedure %s (%d): procedures calling procedures "
+		                            "(including indirectly through SQL) may not nest more than %d levels deep",
+		                            kNestingErrorText, kMaxProcedureNesting, kMaxProcedureNesting);
 	}
 	ProcedureNestingGuard nesting_guard;
 
@@ -1119,12 +1120,13 @@ SourceResultType PhysicalCallProcedure::GetDataInternal(ExecutionContext &contex
 	JSValue settled_value = JS_UNDEFINED;
 	try {
 		RegisterSqlApi(js_context);
-		auto source = "(async function(" + StringUtil::Join(procedure.parameter_names, ", ") + ") {\n" + procedure.body +
-		              "\n})";
+		auto source =
+		    "(async function(" + StringUtil::Join(procedure.parameter_names, ", ") + ") {\n" + procedure.body + "\n})";
 		function = JS_Eval(js_context, source.c_str(), source.size(), "<procedure>", JS_EVAL_TYPE_GLOBAL);
 		if (JS_IsException(function)) {
 			auto error = GetJSError(js_context);
-			throw InvalidInputException("JavaScript procedure '%s' could not be compiled: %s", procedure.name.GetIdentifierName(), error);
+			throw InvalidInputException("JavaScript procedure '%s' could not be compiled: %s",
+			                            procedure.name.GetIdentifierName(), error);
 		}
 		for (auto &value : values) {
 			js_arguments.push_back(ToJSValue(js_context, value));
@@ -1142,10 +1144,10 @@ SourceResultType PhysicalCallProcedure::GetDataInternal(ExecutionContext &contex
 			if (IsNestingLimitError(error)) {
 				// already the collapsed root cause from a deeper invocation: propagate the
 				// core message instead of accumulating one label per recursion level
-				throw InvalidInputException(
-				    StripExceptionLabels(error.substr(0, error.find('\n'))));
+				throw InvalidInputException(StripExceptionLabels(error.substr(0, error.find('\n'))));
 			}
-			throw InvalidInputException("JavaScript procedure '%s' failed: %s", procedure.name.GetIdentifierName(), error);
+			throw InvalidInputException("JavaScript procedure '%s' failed: %s", procedure.name.GetIdentifierName(),
+			                            error);
 		}
 		bool rejected = false;
 		settled_value = RunProcedurePromiseLoop(js_context, sql_api, root_promise, rejected);
@@ -1158,7 +1160,8 @@ SourceResultType PhysicalCallProcedure::GetDataInternal(ExecutionContext &contex
 			if (IsNestingLimitError(error)) {
 				throw InvalidInputException(StripExceptionLabels(error.substr(0, error.find('\n'))));
 			}
-			throw InvalidInputException("JavaScript procedure '%s' failed: %s", procedure.name.GetIdentifierName(), error);
+			throw InvalidInputException("JavaScript procedure '%s' failed: %s", procedure.name.GetIdentifierName(),
+			                            error);
 		}
 		auto duckdb_result = FromJSValue(js_context, settled_value, context.client, procedure.return_type);
 		JS_FreeValue(js_context, settled_value);

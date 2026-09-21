@@ -101,7 +101,8 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 				throw CatalogException("Table \"%s\" is not a materialized view", table.name);
 			}
 			if (!stmt.info->materialized_view && table.IsMaterializedView()) {
-				throw CatalogException("Materialized view \"%s\" must be dropped with DROP MATERIALIZED VIEW", table.name);
+				throw CatalogException("Materialized view \"%s\" must be dropped with DROP MATERIALIZED VIEW",
+				                       table.name);
 			}
 		}
 		if (entry->internal) {

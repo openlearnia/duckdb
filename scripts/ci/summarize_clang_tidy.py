@@ -4,7 +4,6 @@ import argparse
 import re
 from pathlib import Path
 
-
 ERROR_PATTERN = re.compile(r"^[^\s].*: error:")
 CLANG_TIDY_INVOCATION_PATTERN = re.compile(r"^(?:\S*/)?clang-tidy(?:-\d+)?(?:\s|$)")
 CLANG_TIDY_STATUS_PATTERNS = (

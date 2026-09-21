@@ -13,7 +13,6 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-
 DEFAULT_ASSET_BASE_URL = "https://duckdb-staging.duckdb.org"
 DOWNLOAD_USER_AGENT = "duckdb-ci/check-staged-extensions"
 DOWNLOAD_RETRIES = 2

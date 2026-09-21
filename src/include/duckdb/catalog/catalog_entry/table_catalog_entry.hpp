@@ -128,8 +128,8 @@ public:
 		return materialized_view_refresh_rows_changed;
 	}
 	DUCKDB_API void SetLastMaterializedViewRefreshMetrics(int64_t duration_ms, int64_t rows_written,
-	                                                     int64_t rows_added = -1, int64_t rows_removed = -1,
-	                                                     int64_t rows_changed = -1);
+	                                                      int64_t rows_added = -1, int64_t rows_removed = -1,
+	                                                      int64_t rows_changed = -1);
 	DUCKDB_API bool MaterializedViewIsStale(ClientContext &context);
 
 	DUCKDB_API virtual bool HasGeneratedColumns() const;

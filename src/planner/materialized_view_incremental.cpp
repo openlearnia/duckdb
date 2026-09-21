@@ -196,9 +196,10 @@ bool TryBuildMaterializedViewIncrementalQuery(ClientContext &context, TableCatal
 	}
 	auto &base = node.from_table->Cast<BaseTableRef>();
 	auto qualified_base = base.GetQualifiedName();
-	auto base_schema = qualified_base.Schema().empty() ? string(DEFAULT_SCHEMA) : qualified_base.Schema().GetIdentifierName();
+	auto base_schema =
+	    qualified_base.Schema().empty() ? string(DEFAULT_SCHEMA) : qualified_base.Schema().GetIdentifierName();
 	auto base_catalog = qualified_base.Catalog().empty() ? dependency->ParentCatalog().GetName().GetIdentifierName()
-	                                                    : qualified_base.Catalog().GetIdentifierName();
+	                                                     : qualified_base.Catalog().GetIdentifierName();
 	if (!StringUtil::CIEquals(base_catalog, dependency->ParentCatalog().GetName().GetIdentifierName()) ||
 	    !StringUtil::CIEquals(base_schema, dependency->schema.name.GetIdentifierName()) ||
 	    !StringUtil::CIEquals(qualified_base.Name().GetIdentifierName(), dependency->name.GetIdentifierName())) {
@@ -285,9 +286,9 @@ bool TryBuildMaterializedViewIncrementalQuery(ClientContext &context, TableCatal
 		auto key_it = std::find(key_positions.begin(), key_positions.end(), select_idx);
 		if (key_it != key_positions.end()) {
 			auto key_idx = NumericCast<idx_t>(key_it - key_positions.begin());
-			result_select += StringUtil::Format("COALESCE(m.%s, d.__k%llu) AS %s",
-			                                        MVIdentifier(column_name.GetIdentifierName()), key_idx,
-			                                        MVIdentifier(column_name.GetIdentifierName()));
+			result_select +=
+			    StringUtil::Format("COALESCE(m.%s, d.__k%llu) AS %s", MVIdentifier(column_name.GetIdentifierName()),
+			                       key_idx, MVIdentifier(column_name.GetIdentifierName()));
 			continue;
 		}
 		auto aggregate_it = std::find_if(aggregates.begin(), aggregates.end(), [&](const NativeMVAggregateInfo &entry) {
@@ -297,7 +298,7 @@ bool TryBuildMaterializedViewIncrementalQuery(ClientContext &context, TableCatal
 			return false;
 		}
 		result_select += MergeAggregateSQL(*aggregate_it, column_name.GetIdentifierName()) + " AS " +
-		                  MVIdentifier(column_name.GetIdentifierName());
+		                 MVIdentifier(column_name.GetIdentifierName());
 	}
 
 	string merge_from;
@@ -311,7 +312,7 @@ bool TryBuildMaterializedViewIncrementalQuery(ClientContext &context, TableCatal
 			}
 			auto &column_name = view.GetColumns().GetColumn(LogicalIndex(key_positions[key_idx])).Name();
 			join_condition += StringUtil::Format("m.%s IS NOT DISTINCT FROM d.__k%llu",
-			                                  MVIdentifier(column_name.GetIdentifierName()), key_idx);
+			                                     MVIdentifier(column_name.GetIdentifierName()), key_idx);
 		}
 		merge_from = view_sql + " m FULL OUTER JOIN __delta d ON " + join_condition;
 	}
