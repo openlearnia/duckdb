@@ -572,6 +572,8 @@ enum class TableFunctionIdentifierConversion : uint8_t;
 
 enum class TableFunctionParallelism : uint8_t;
 
+enum class TableModificationType : uint8_t;
+
 enum class TablePartitionInfo : uint8_t;
 
 enum class TableReferenceType : uint8_t;
@@ -1456,6 +1458,9 @@ const char* EnumUtil::ToChars<TableFunctionIdentifierConversion>(TableFunctionId
 
 template<>
 const char* EnumUtil::ToChars<TableFunctionParallelism>(TableFunctionParallelism value);
+
+template<>
+const char* EnumUtil::ToChars<TableModificationType>(TableModificationType value);
 
 template<>
 const char* EnumUtil::ToChars<TablePartitionInfo>(TablePartitionInfo value);
@@ -2378,6 +2383,9 @@ TableFunctionIdentifierConversion EnumUtil::FromString<TableFunctionIdentifierCo
 
 template<>
 TableFunctionParallelism EnumUtil::FromString<TableFunctionParallelism>(const char *value);
+
+template<>
+TableModificationType EnumUtil::FromString<TableModificationType>(const char *value);
 
 template<>
 TablePartitionInfo EnumUtil::FromString<TablePartitionInfo>(const char *value);

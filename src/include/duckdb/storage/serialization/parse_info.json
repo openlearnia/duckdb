@@ -736,6 +736,11 @@
         "serialize_condition": "qualified_name.Path().size() > 3",
         "deserialize_default": "QualifiedName()",
         "deserialize_skip_assign": true
+      },
+      {
+        "id": 209,
+        "name": "materialized_view",
+        "type": "bool"
       }
     ],
     "methods": {

@@ -207,6 +207,102 @@
         "id": 206,
         "name": "options",
         "type": "case_insensitive_map_t<ParsedExpression*>"
+      },
+      {
+        "id": 207,
+        "name": "catalog_materialized_view",
+        "type": "bool"
+      },
+      {
+        "id": 208,
+        "name": "materialized_view",
+        "type": "bool"
+      },
+      {
+        "id": 209,
+        "name": "materialized_view_query",
+        "type": "string"
+      },
+      {
+        "id": 210,
+        "name": "materialized_view_dependency_catalogs",
+        "type": "vector<string>"
+      },
+      {
+        "id": 211,
+        "name": "materialized_view_dependency_schemas",
+        "type": "vector<string>"
+      },
+      {
+        "id": 212,
+        "name": "materialized_view_dependency_tables",
+        "type": "vector<string>"
+      },
+      {
+        "id": 213,
+        "name": "materialized_view_dependency_generations",
+        "type": "vector<idx_t>"
+      },
+      {
+        "id": 214,
+        "name": "materialized_view_dependency_append_generations",
+        "type": "vector<idx_t>"
+      },
+      {
+        "id": 215,
+        "name": "materialized_view_dependency_delete_generations",
+        "type": "vector<idx_t>"
+      },
+      {
+        "id": 216,
+        "name": "materialized_view_dependency_update_generations",
+        "type": "vector<idx_t>"
+      },
+      {
+        "id": 217,
+        "name": "materialized_view_dependency_row_counts",
+        "type": "vector<idx_t>"
+      },
+      {
+        "id": 218,
+        "name": "materialized_view_refresh_mode",
+        "type": "string",
+        "default": "\"full\""
+      },
+      {
+        "id": 219,
+        "name": "materialized_view_refresh_times",
+        "type": "vector<int64_t>"
+      },
+      {
+        "id": 220,
+        "name": "materialized_view_refresh_modes",
+        "type": "vector<string>"
+      },
+      {
+        "id": 221,
+        "name": "materialized_view_refresh_durations",
+        "type": "vector<int64_t>"
+      },
+      {
+        "id": 222,
+        "name": "materialized_view_refresh_rows_written",
+        "type": "vector<int64_t>"
+      },
+      {
+        "id": 223,
+        "name": "materialized_view_refresh_rows_added",
+        "type": "vector<int64_t>"
+      },
+      {
+        "id": 224,
+        "name": "materialized_view_refresh_rows_removed",
+        "type": "vector<int64_t>"
+      },
+      {
+        "id": 225,
+        "name": "materialized_view_refresh_rows_changed",
+        "type": "vector<int64_t>"
       }
     ],
     "methods": {

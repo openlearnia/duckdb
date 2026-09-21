@@ -242,6 +242,7 @@
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table/segment_tree.hpp"
 #include "duckdb/storage/temporary_file_manager.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 
 namespace duckdb {
 
@@ -6351,6 +6352,26 @@ const char* EnumUtil::ToChars<TableFunctionParallelism>(TableFunctionParallelism
 template<>
 TableFunctionParallelism EnumUtil::FromString<TableFunctionParallelism>(const char *value) {
 	return static_cast<TableFunctionParallelism>(StringUtil::StringToEnum(GetTableFunctionParallelismValues(), 3, "TableFunctionParallelism", value));
+}
+
+const StringUtil::EnumStringLiteral *GetTableModificationTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(TableModificationType::APPEND), "APPEND" },
+		{ static_cast<uint32_t>(TableModificationType::DELETE), "DELETE" },
+		{ static_cast<uint32_t>(TableModificationType::UPDATE), "UPDATE" },
+		{ static_cast<uint32_t>(TableModificationType::ALL), "ALL" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<TableModificationType>(TableModificationType value) {
+	return StringUtil::EnumToString(GetTableModificationTypeValues(), 4, "TableModificationType", static_cast<uint32_t>(value));
+}
+
+template<>
+TableModificationType EnumUtil::FromString<TableModificationType>(const char *value) {
+	return static_cast<TableModificationType>(StringUtil::StringToEnum(GetTableModificationTypeValues(), 4, "TableModificationType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetTablePartitionInfoValues() {
