@@ -73,7 +73,8 @@ class RetryScriptTest(unittest.TestCase):
         import fcntl
         import signal
 
-        child_code = textwrap.dedent("""
+        child_code = textwrap.dedent(
+            """
             import fcntl
             import signal
             import sys
@@ -85,15 +86,18 @@ class RetryScriptTest(unittest.TestCase):
                 signal.signal(signal.SIGTERM, signal.SIG_IGN)
                 Path(sys.argv[2]).touch()
                 time.sleep(60)
-            """)
-        parent_code = textwrap.dedent("""
+            """
+        )
+        parent_code = textwrap.dedent(
+            """
             import subprocess
             import sys
             import time
 
             subprocess.Popen([sys.executable, "-c", sys.argv[1], sys.argv[2], sys.argv[3]])
             time.sleep(60)
-            """)
+            """
+        )
 
         with tempfile.TemporaryDirectory() as temp_dir:
             lock_path = Path(temp_dir) / "held.lock"

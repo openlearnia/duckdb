@@ -59,7 +59,9 @@ def record(duckdb, path):
                 """
                 select (i // {block})::int, md5(string_agg(icu_sort_key(chr(i::int), '{name}'), '' order by i))
                 from range(1, {limit}) t(i) where i not between 55296 and 57343 group by 1 order by 1
-            """.format(block=BLOCK_SIZE, limit=MAX_CODEPOINT, name=name),
+            """.format(
+                    block=BLOCK_SIZE, limit=MAX_CODEPOINT, name=name
+                ),
             )
             for block, digest in rows:
                 f.write("%s\t%s\t%s\n" % (name, block, digest))

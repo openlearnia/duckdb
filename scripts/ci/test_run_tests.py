@@ -468,7 +468,8 @@ require windows: 2
 
     def test_fail_require_skip_enabled_fails(self):
         test_list_path = create_temp_file("test/sql/a.test\n")
-        helper_path = create_temp_file("""
+        helper_path = create_temp_file(
+            """
             #!/bin/sh
             cat <<'EOF'
             Skipped tests for the following reasons:
@@ -477,7 +478,8 @@ require windows: 2
             require spatial: 124
             EOF
             exit 0
-            """)
+            """
+        )
         os.chmod(helper_path, 0o755)
 
         try:
@@ -507,13 +509,16 @@ require windows: 2
         self.assertIn("require spatial: 124", summary_block)
 
     def test_generate_list(self):
-        listed_tests_path = create_temp_file("""
+        listed_tests_path = create_temp_file(
+            """
             name\tgroup
             test/sql/slow.test\t[.][slow]
             test/sql/fast.test\t[fast]
-            """)
+            """
+        )
 
-        list_helper_path = create_temp_file("""
+        list_helper_path = create_temp_file(
+            """
             #!/bin/sh
             # run_tests.py calls: <helper> --list-tests <pattern>
             if [ "$1" != "--list-tests" ]; then
@@ -525,7 +530,8 @@ require windows: 2
             fi
             cat "$2"
             exit 2
-            """)
+            """
+        )
 
         os.chmod(list_helper_path, 0o755)
 
@@ -583,16 +589,21 @@ require windows: 2
         self.assertNotIn("all 1 config runs passed", proc.stdout)
 
     def test_changed_tests_flag_uses_second_list_file(self):
-        base_test_list_path = create_temp_file("""
+        base_test_list_path = create_temp_file(
+            """
             test/sql/a.test
             test/sql/b.test
-            """)
-        changed_test_list_path = create_temp_file("""
+            """
+        )
+        changed_test_list_path = create_temp_file(
+            """
             test/sql/b.test
             test/sql/c.test
-            """)
+            """
+        )
 
-        list_helper_path = create_temp_file("""
+        list_helper_path = create_temp_file(
+            """
             #!/bin/sh
             if [ "$1" != "--list-tests" ]; then
               exit 2
@@ -606,7 +617,8 @@ require windows: 2
               shift
             done
             exit 0
-            """)
+            """
+        )
 
         os.chmod(list_helper_path, 0o755)
         list_commands = []
@@ -650,11 +662,13 @@ require windows: 2
         self.assertIn("ran tests: ", proc.stdout)
 
     def test_stabilize_tests_reruns_selected_tests_with_fast_and_slow_policy(self):
-        test_list_path = create_temp_file("""
+        test_list_path = create_temp_file(
+            """
             name\tgroup
             test/sql/fast.test\t[fast]
             test/sql/slow.test\t[.][slow]
-            """)
+            """
+        )
         run_calls = []
 
         def fake_run_tests(_config, batches, total_tests):
@@ -695,18 +709,24 @@ require windows: 2
         self.assertEqual(len(slow_reruns), 2)
 
     def test_changed_tests_auto_stabilize_reruns_only_added_tests(self):
-        base_test_list_path = create_temp_file("""
+        base_test_list_path = create_temp_file(
+            """
             test/sql/a.test
-            """)
-        changed_test_list_path = create_temp_file("""
+            """
+        )
+        changed_test_list_path = create_temp_file(
+            """
             test/sql/a.test
             test/sql/b.test
-            """)
-        listed_tests_path = create_temp_file("""
+            """
+        )
+        listed_tests_path = create_temp_file(
+            """
             name\tgroup
             test/sql/a.test\t[fast]
             test/sql/b.test\t[fast]
-            """)
+            """
+        )
         list_helper_path = create_temp_file(
             """
             #!/bin/sh
@@ -817,10 +837,12 @@ require windows: 2
         self.assertEqual(run_calls[2]["total_tests"], 501)
 
     def test_stabilization_failure_fails_config_run(self):
-        test_list_path = create_temp_file("""
+        test_list_path = create_temp_file(
+            """
             name\tgroup
             test/sql/fast.test\t[fast]
-            """)
+            """
+        )
         run_results = [
             run_tests.ConfigRunResult(
                 returncode=0, passed_tests=1, failed_tests=0, skipped_tests=0, elapsed_seconds=0.0
@@ -1601,7 +1623,9 @@ with expansion:
 ===============================================================================
 test cases:  10 |   9 passed | 1 failed
 assertions: 359 | 358 passed | 1 failed
-""".format(progress_bar_path=progress_bar_path)
+""".format(
+            progress_bar_path=progress_bar_path
+        )
         stderr = ""
         lines, reproduce_batch = run_tests.summarize_failure_output(None, stdout, stderr, batch)
         self.assertEqual(reproduce_batch, ["Test Progress Bar Fast"])
@@ -1651,7 +1675,9 @@ with expansion:
 ===============================================================================
 test cases:  2 |   1 passed | 1 failed
 assertions: 359 | 358 passed | 1 failed
-""".format(progress_bar_path=progress_bar_path)
+""".format(
+            progress_bar_path=progress_bar_path
+        )
         stderr = ""
         lines, reproduce_batch = run_tests.summarize_failure_output(None, stdout, stderr, batch)
         self.assertEqual(reproduce_batch, ["Test Progress Bar Fast"])
@@ -1734,7 +1760,9 @@ with expansion:
 ===============================================================================
 test cases: 1 | 1 failed
 assertions: 4 | 3 passed | 1 failed
-""".format(remote_optimizer_path=remote_optimizer_path)
+""".format(
+            remote_optimizer_path=remote_optimizer_path
+        )
         stderr = """
 Query failed with message: INTERNAL Error: Failed to read "8" bytes from socket - read 0 instead
 
@@ -1893,7 +1921,8 @@ For more information, see https://duckdb.org/docs/current/dev/internal_errors
     def test_assertion_source_line_is_not_applied_to_the_test_file(self):
         # the assertion location points at a C++ source that is not present, so it renders no snippet of its own
         test_path = create_temp_file("query I\nSELECT 42\n----\n42\n")
-        stdout = textwrap.dedent(f"""
+        stdout = textwrap.dedent(
+            f"""
             [1/2] (50%): {test_path}
             -------------------------------------------------------------------------------
             {test_path}
@@ -1902,7 +1931,8 @@ For more information, see https://duckdb.org/docs/current/dev/internal_errors
               REQUIRE( result->success )
             with expansion:
               false
-            """)
+            """
+        )
         try:
             lines, reproduce_batch = run_tests.summarize_failure_output(None, stdout, "", [str(test_path)])
         finally:
@@ -1956,12 +1986,15 @@ For more information, see https://duckdb.org/docs/current/dev/internal_errors
         self.assertEqual(reproduce_batch, ["/tmp/second.test_slow"])
 
     def test_multiple_test_configs_run_independently(self):
-        listed_tests_path = create_temp_file("""
+        listed_tests_path = create_temp_file(
+            """
             name\tgroup
             test/sql/fast.test\t[fast]
-            """)
+            """
+        )
 
-        list_helper_path = create_temp_file("""
+        list_helper_path = create_temp_file(
+            """
             #!/bin/sh
             if [ "$1" = "--test-config" ] && [ "$2" = "test/configs/a.json" ] && [ "$3" = "--list-tests" ]; then
               echo "name\tgroup"
@@ -1974,7 +2007,8 @@ For more information, see https://duckdb.org/docs/current/dev/internal_errors
               exit 0
             fi
             exit 2
-            """)
+            """
+        )
         os.chmod(list_helper_path, 0o755)
 
         try:
@@ -2004,7 +2038,8 @@ For more information, see https://duckdb.org/docs/current/dev/internal_errors
         self.assertIn("all 2 config runs passed", proc.stdout)
 
     def test_multiple_test_configs_aggregate_failure(self):
-        failing_helper = create_temp_file("""
+        failing_helper = create_temp_file(
+            """
             #!/bin/sh
             if [ "$1" = "--test-config" ] && [ "$2" = "test/configs/empty.json" ] && [ "$3" = "--list-tests" ]; then
               echo "name\tgroup"
@@ -2016,7 +2051,8 @@ For more information, see https://duckdb.org/docs/current/dev/internal_errors
               exit 0
             fi
             exit 2
-            """)
+            """
+        )
         os.chmod(failing_helper, 0o755)
         try:
             proc = start_runner(
@@ -2093,11 +2129,14 @@ For more information, see https://duckdb.org/docs/current/dev/internal_errors
         )
 
     def test_ci_groups_close_when_all_configs_pass(self):
-        listed_tests_path = create_temp_file("""
+        listed_tests_path = create_temp_file(
+            """
             name\tgroup
             test/sql/fast.test\t[fast]
-            """)
-        list_helper_path = create_temp_file("""
+            """
+        )
+        list_helper_path = create_temp_file(
+            """
             #!/bin/sh
             if [ "$1" = "--test-config" ] && [ "$3" = "--list-tests" ]; then
               echo "name\tgroup"
@@ -2105,7 +2144,8 @@ For more information, see https://duckdb.org/docs/current/dev/internal_errors
               exit 0
             fi
             exit 2
-            """)
+            """
+        )
         os.chmod(list_helper_path, 0o755)
         try:
             with mock.patch.dict(os.environ, {"CI": "1"}, clear=False):
@@ -2138,7 +2178,8 @@ For more information, see https://duckdb.org/docs/current/dev/internal_errors
         self.assertGreaterEqual(proc.stdout.count("ran tests: "), 2)
 
     def test_ci_groups_stay_open_after_first_failed_config(self):
-        failing_helper = create_temp_file("""
+        failing_helper = create_temp_file(
+            """
             #!/bin/sh
             if [ "$1" = "--test-config" ] && [ "$2" = "test/configs/fail.json" ] && [ "$3" = "--list-tests" ]; then
               exit 1
@@ -2149,7 +2190,8 @@ For more information, see https://duckdb.org/docs/current/dev/internal_errors
               exit 0
             fi
             exit 2
-            """)
+            """
+        )
         os.chmod(failing_helper, 0o755)
         try:
             with mock.patch.dict(os.environ, {"CI": "1"}, clear=False):

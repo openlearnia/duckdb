@@ -37,7 +37,9 @@ static const unsigned char HTML_TEMPLATE[] = {
 };
 
 } // namespace duckdb
-""" % to_byte_array(data)
+""" % to_byte_array(
+        data
+    )
     with open(DST, 'w', newline='\n') as f:
         f.write(content)
     print("generate_html_template.py: wrote %s (%d bytes embedded)" % (DST, len(data)))
