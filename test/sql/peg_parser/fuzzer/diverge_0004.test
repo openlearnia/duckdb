@@ -1,8 +1,8 @@
 # name: test/sql/peg_parser/fuzzer/diverge_0004.test
-# description: PEG should reject (currently accepts): Not implemented Error: Cannot drop this type yet
+# description: Diverged from upstream: native materialized views are implemented
+#   on this fork, so DROP MATERIALIZED VIEW succeeds (upstream pins it as
+#   "Not implemented Error: Cannot drop MATERIALIZED VIEW yet").
 # group: [fuzzer]
 
-statement error
+statement ok
 DROP MATERIALIZED VIEW IF EXISTS t
-----
-Not implemented Error: Cannot drop MATERIALIZED VIEW yet
