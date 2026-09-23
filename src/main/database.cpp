@@ -393,7 +393,8 @@ void DatabaseInstance::InitializeInstance(const char *database_path, DBConfig *u
 	LoadExtensionSettings();
 }
 
-DuckDB::DuckDB(const char *path, DBConfig *new_config) : instance(make_shared_ptr<DatabaseInstance>()) {
+DuckDB::DuckDB(const char *path, DBConfig *new_config)
+    : instance(make_shared_ptr<DatabaseInstance>()), owns_instance(true) {
 	instance->Initialize(path, new_config);
 	if (instance->config.options.load_extensions) {
 		ExtensionHelper::LoadAllExtensions(*this);
@@ -408,6 +409,7 @@ shared_ptr<DuckDB> DuckDB::CreateEmpty(DBConfig *config) {
 	auto instance = make_shared_ptr<DatabaseInstance>();
 	instance->InitializeEmpty(config);
 	auto db = make_shared_ptr<DuckDB>(*instance);
+	db->owns_instance = true;
 	if (instance->config.options.load_extensions) {
 		ExtensionHelper::LoadAllExtensions(*db);
 	}
@@ -418,6 +420,9 @@ DuckDB::DuckDB(DatabaseInstance &instance_p) : instance(instance_p.shared_from_t
 }
 
 DuckDB::~DuckDB() {
+	if (owns_instance && instance && instance->owner_close_callback) {
+		instance->owner_close_callback(*instance);
+	}
 }
 
 SecretManager &DatabaseInstance::GetSecretManager() {

@@ -48,26 +48,29 @@ unique_ptr<TableRef> ShellScanLastResult(ClientContext &context, ReplacementScan
 	if (table_name != "_") {
 		return nullptr;
 	}
-	auto &state = duckdb_shell::ShellState::Get();
-	state.last_result_referenced = true;
-	if (!state.last_result) {
+	auto state = duckdb_shell::ShellState::GetReference();
+	if (!state) {
 		throw BinderException("Failed to query last result \"_\": no result available");
 	}
-	return make_uniq<ColumnDataRef>(state.last_result->Collection(), state.last_result->GetNames());
+	state->last_result_referenced = true;
+	if (!state->last_result) {
+		throw BinderException("Failed to query last result \"_\": no result available");
+	}
+	return make_uniq<ColumnDataRef>(state->last_result->Collection(), state->last_result->GetNames());
 }
 
 // Runs after the binder has finished. Releases the previous last_result early if it's
 // safe — i.e. the new query doesn't statically reference `_` (the replacement scan
 // would have fired)
 void ShellPostBind(PlannerExtensionInput &input, BoundStatement &statement) {
-	auto &state = duckdb_shell::ShellState::Get();
-	if (!state.conn || !RefersToSameObject(*state.conn->context, input.context)) {
+	auto state = duckdb_shell::ShellState::GetReference();
+	if (!state || !state->conn || !RefersToSameObject(*state->conn->context, input.context)) {
 		return;
 	}
-	if (state.last_result_referenced) {
+	if (state->last_result_referenced) {
 		return;
 	}
-	state.last_result.reset();
+	state->last_result.reset();
 }
 
 //===--------------------------------------------------------------------===//

@@ -773,12 +773,12 @@ string ShellState::EscapeCString(const string &str) {
 
 void ShellState::Exit(int exit_code) {
 	if (exit_code == 0) {
-		// clean-up shell state if this is a successful exit
-		auto shell_state = GetReference();
-		if (shell_state) {
-			delete shell_state;
-		}
-		shell_state = nullptr;
+		// clean-up shell state if this is a successful exit - clear the reference first so
+		// background threads can no longer resolve a half-destroyed state
+		auto &reference = GetReference();
+		auto to_delete = reference;
+		reference = nullptr;
+		delete to_delete;
 	}
 	// then exit
 	exit(exit_code);
@@ -3681,11 +3681,11 @@ int wmain(int argc, wchar_t **wargv) {
 		fprintf(stderr, "Exited due to error: %s", error.Message().c_str());
 	}
 	try {
-		// destroy shell state prior to program clean-up
-		if (shell_state) {
-			delete shell_state;
-		}
+		// destroy shell state prior to program clean-up - clear the reference first so
+		// background threads can no longer resolve a half-destroyed state
+		auto to_delete = shell_state;
 		shell_state = nullptr;
+		delete to_delete;
 	} catch (std::exception &ex) {
 		rc = 1;
 		ErrorData error(ex);

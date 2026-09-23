@@ -17,6 +17,8 @@
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/main/extension_manager.hpp"
 
+#include <functional>
+
 namespace duckdb {
 class LocalDatabaseFileSystem;
 
@@ -132,6 +134,9 @@ private:
 	//! links, and which reaches it through autoloading - would therefore keep all of DuckDB alive in extensions that
 	//! link it statically. Only Initialize names it, and nothing that fails to open a database can reach that.
 	invoke_ext_capi_v2_fun_t invoke_capi_v2;
+
+public:
+	std::function<void(DatabaseInstance &)> owner_close_callback;
 };
 
 //! The database object. This object holds the catalog and all the
@@ -151,6 +156,7 @@ public:
 
 	//! Reference to the actual database instance
 	shared_ptr<DatabaseInstance> instance;
+	bool owns_instance = false;
 
 public:
 	// Load a statically loaded extension by its class
