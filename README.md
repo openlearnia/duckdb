@@ -13,6 +13,28 @@
   <a href="https://github.com/duckdb/duckdb/releases/"><img src="https://img.shields.io/github/v/release/duckdb/duckdb?color=brightgreen&display_name=tag&logo=duckdb&logoColor=white" alt="Latest Release"></a>
 </p>
 
+> **OpenLearnia fork** — paired core for [openlearnia/ducklake](https://github.com/openlearnia/ducklake)
+> (`sync/v2-cyanoptera-alpha42376`, tracking upstream `v2.0-cyanoptera`).
+> Fork additions on top of upstream:
+>
+> - **Native materialized views** — `CREATE`/`REFRESH`/`DROP MATERIALIZED VIEW`
+>   grammar and catalog entries, dependency tracking, key-aware refresh diffs,
+>   refresh metrics and history, staleness introspection.
+> - **JavaScript stored procedures** — quickjs-ng runtime; persisted
+>   `CREATE PROCEDURE ... LANGUAGE JAVASCRIPT` with async SQL access via a
+>   `duckdb` global (`execute`/`query`), transactions, and `Promise` support.
+> - **Background-work teardown hooks** — an owner-close callback on `DuckDB`
+>   (`owner_close_callback`/`owns_instance`) lets extensions stop and join
+>   background threads *before* static destruction; shell state is null-safe
+>   for callbacks from internal connections.
+> - **Extension signing** — the OpenLearnia release key is trusted in
+>   `public_keys[]`, so CI-signed extensions install without `-unsigned`.
+> - **Scanner/storage fixes** — nested-struct statistics and filters across
+>   schema evolution, disjoint-struct remapping on preview scans, and
+>   materialized-view serialization registrations.
+>
+> Upstream README follows.
+
 ## DuckDB
 
 DuckDB is a high-performance analytical database system. It is designed to be fast, reliable, portable, and easy to use. DuckDB provides a rich SQL dialect with support far beyond basic SQL. DuckDB supports arbitrary and nested correlated subqueries, window functions, collations, complex types (arrays, structs, maps), and [several extensions designed to make SQL easier to use](https://duckdb.org/docs/current/sql/dialect/friendly_sql.html).
