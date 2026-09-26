@@ -732,6 +732,12 @@ static const TransformFrameOps PROCEDURE_PARAMETERS_OPS = {
 static const TransformFrameOps PROCEDURE_PARAMETER_OPS = {
     "ProcedureParameter", &PEGTransformerFactory::InitializeProcedureParameterTrampoline,
     &PEGTransformerFactory::FinalizeProcedureParameterTrampoline};
+static const TransformFrameOps SECURITY_MODIFIER_OPS = {"SecurityModifier",
+                                                        &PEGTransformerFactory::InitializeSecurityModifierTrampoline,
+                                                        &PEGTransformerFactory::FinalizeSecurityModifierTrampoline};
+static const TransformFrameOps SECURITY_TYPE_OPS = {"SecurityType",
+                                                    &PEGTransformerFactory::InitializeSecurityTypeTrampoline,
+                                                    &PEGTransformerFactory::FinalizeSecurityTypeTrampoline};
 static const TransformFrameOps CREATE_SCHEMA_STMT_OPS = {"CreateSchemaStmt",
                                                          &PEGTransformerFactory::InitializeCreateSchemaStmtTrampoline,
                                                          &PEGTransformerFactory::FinalizeCreateSchemaStmtTrampoline};
@@ -3263,6 +3269,8 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"CreateProcedureStmt", &CREATE_PROCEDURE_STMT_OPS},
 	    {"ProcedureParameters", &PROCEDURE_PARAMETERS_OPS},
 	    {"ProcedureParameter", &PROCEDURE_PARAMETER_OPS},
+	    {"SecurityModifier", &SECURITY_MODIFIER_OPS},
+	    {"SecurityType", &SECURITY_TYPE_OPS},
 	    {"CreateSchemaStmt", &CREATE_SCHEMA_STMT_OPS},
 	    {"CreateSecretStmt", &CREATE_SECRET_STMT_OPS},
 	    {"SecretStorageSpecifier", &SECRET_STORAGE_SPECIFIER_OPS},
@@ -8730,7 +8738,11 @@ PEGTransformerFactory::FinalizeTableMacroDefinitionTrampoline(PEGTransformer &tr
 void PEGTransformerFactory::InitializeCreateProcedureStmtTrampoline(PEGTransformer &transformer,
                                                                     GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
-	process.ReserveChildSlots(4);
+	process.ReserveChildSlots(5);
+	auto &security_modifier_opt = list_pr.GetChild(8).Cast<OptionalParseResult>();
+	if (security_modifier_opt.HasResult()) {
+		process.PushChild({transformer.GetRule("SecurityModifier"), security_modifier_opt.GetResult()}, 4);
+	}
 	process.PushChild({transformer.GetRule("Type"), list_pr.GetChild(5)}, 3);
 	auto &procedure_parameters_opt = ExtractResultFromParens(list_pr.GetChild(3)).Cast<OptionalParseResult>();
 	if (procedure_parameters_opt.HasResult()) {
@@ -8758,9 +8770,14 @@ PEGTransformerFactory::FinalizeCreateProcedureStmtTrampoline(PEGTransformer &tra
 	}
 	auto type = process.TakeResult<LogicalType>(3);
 	auto identifier = list_pr.GetChild(7).Cast<IdentifierParseResult>().identifier;
-	auto string_literal = TransformStringLiteral(transformer, list_pr.GetChild(9));
-	auto result = TransformCreateProcedureStmt(transformer, if_not_exists, qualified_name,
-	                                           std::move(procedure_parameters), type, identifier, string_literal);
+	optional<string> security_modifier {};
+	if (process.child_results[4]) {
+		security_modifier = process.TakeResult<string>(4);
+	}
+	auto string_literal = TransformStringLiteral(transformer, list_pr.GetChild(10));
+	auto result =
+	    TransformCreateProcedureStmt(transformer, if_not_exists, qualified_name, std::move(procedure_parameters), type,
+	                                 identifier, security_modifier, string_literal);
 	return make_uniq<TypedTransformResult<unique_ptr<CreateStatement>>>(std::move(result));
 }
 
@@ -8805,6 +8822,33 @@ PEGTransformerFactory::FinalizeProcedureParameterTrampoline(PEGTransformer &tran
 	auto type = process.TakeResult<LogicalType>(1);
 	auto result = TransformProcedureParameter(transformer, col_id, type);
 	return make_uniq<TypedTransformResult<MacroParameter>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeSecurityModifierTrampoline(PEGTransformer &transformer,
+                                                                 GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(1);
+	process.PushChild({transformer.GetRule("SecurityType"), list_pr.GetChild(1)}, 0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeSecurityModifierTrampoline(PEGTransformer &transformer,
+                                                          GeneratedTransformProcess &process) {
+	auto result = process.TakeResult<string>(0);
+	return make_uniq<TypedTransformResult<string>>(result);
+}
+
+void PEGTransformerFactory::InitializeSecurityTypeTrampoline(PEGTransformer &transformer,
+                                                             GeneratedTransformProcess &process) {
+	process.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeSecurityTypeTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = choice_pr.GetResult().Cast<KeywordParseResult>().keyword;
+	return make_uniq<TypedTransformResult<string>>(result);
 }
 
 void PEGTransformerFactory::InitializeCreateSchemaStmtTrampoline(PEGTransformer &transformer,

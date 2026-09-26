@@ -20,7 +20,7 @@ class Catalog;
 
 //! Privileges requested from an AuthorizationProvider. Kept as a bitmask so
 //! multi-privilege statements (e.g. MERGE) can request several at once.
-enum AuthorizationPrivilege : uint8_t {
+enum AuthorizationPrivilege : uint16_t {
 	AUTH_NONE = 0,
 	AUTH_SELECT = 1 << 0,
 	AUTH_INSERT = 1 << 1,
@@ -31,6 +31,8 @@ enum AuthorizationPrivilege : uint8_t {
 	AUTH_ALTER = 1 << 6,
 	//! engine-management operations: ATTACH / DETACH / USE
 	AUTH_ADMIN = 1 << 7,
+	//! calling a routine (stored procedure)
+	AUTH_EXECUTE = 1 << 8,
 };
 
 class AuthorizationProvider {
@@ -46,16 +48,21 @@ public:
 
 	//! Called when a statement modifies a table (INSERT / UPDATE / DELETE /
 	//! MERGE). `privileges` is a bitmask of AuthorizationPrivilege.
-	virtual void CheckModifyTable(ClientContext &context, Catalog &catalog, uint8_t privileges,
+	virtual void CheckModifyTable(ClientContext &context, Catalog &catalog, uint16_t privileges,
 	                              const string &schema_name, const string &table_name) = 0;
 
 	//! Called for catalog-object DDL (CREATE / DROP / ALTER of tables, views,
 	//! schemas, macros). For schemas, `object_name` is the schema name.
-	virtual void CheckModifySchema(ClientContext &context, Catalog &catalog, uint8_t privileges,
+	virtual void CheckModifySchema(ClientContext &context, Catalog &catalog, uint16_t privileges,
 	                              const string &schema_name, const string &object_name) = 0;
 
 	//! Called before ATTACH / DETACH / LOAD / INSTALL statements are executed.
 	virtual void CheckEngineManagement(ClientContext &context) = 0;
+	//! Called when CALL invokes a routine. `security_definer` reports whether the
+	//! routine was declared SECURITY DEFINER, so a provider can resolve the
+	//! execution identity accordingly.
+	virtual void CheckExecuteRoutine(ClientContext &context, Catalog &catalog, const string &schema_name,
+	                                 const string &routine_name, bool security_definer) = 0;
 	virtual bool RequireStatementRebind(ClientContext &context) { return false; }
 	virtual void CheckReadFile(ClientContext &context, const string &function_name) = 0;
 	static bool IsFileReadingFunction(const string &function_name) {
@@ -82,13 +89,16 @@ public:
 	void CheckReadObject(ClientContext &context, Catalog &catalog, bool is_view, const string &schema_name,
 	                     const string &object_name) override {
 	}
-	void CheckModifyTable(ClientContext &context, Catalog &catalog, uint8_t privileges, const string &schema_name,
+	void CheckModifyTable(ClientContext &context, Catalog &catalog, uint16_t privileges, const string &schema_name,
 	                      const string &table_name) override {
 	}
-	void CheckModifySchema(ClientContext &context, Catalog &catalog, uint8_t privileges, const string &schema_name,
+	void CheckModifySchema(ClientContext &context, Catalog &catalog, uint16_t privileges, const string &schema_name,
 	                       const string &object_name) override {
 	}
 	void CheckEngineManagement(ClientContext &context) override {
+	}
+	void CheckExecuteRoutine(ClientContext &context, Catalog &catalog, const string &schema_name,
+	                         const string &routine_name, bool security_definer) override {
 	}
 	void CheckReadFile(ClientContext &context, const string &function_name) override {
 	}

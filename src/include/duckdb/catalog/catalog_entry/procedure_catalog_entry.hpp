@@ -26,6 +26,8 @@ public:
 	LogicalType return_type;
 	string language;
 	string body;
+	//! Declared SECURITY DEFINER rather than the default SECURITY INVOKER.
+	bool security_definer = false;
 
 public:
 	unique_ptr<CatalogEntry> Copy(ClientContext &context) const override;

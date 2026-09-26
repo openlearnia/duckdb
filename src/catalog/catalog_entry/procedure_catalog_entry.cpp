@@ -5,7 +5,8 @@ namespace duckdb {
 ProcedureCatalogEntry::ProcedureCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateProcedureInfo &info)
     : FunctionEntry(CatalogType::PROCEDURE_ENTRY, catalog, schema, info),
       parameter_types(std::move(info.parameter_types)), parameter_names(std::move(info.parameter_names)),
-      return_type(std::move(info.return_type)), language(std::move(info.language)), body(std::move(info.body)) {
+      return_type(std::move(info.return_type)), language(std::move(info.language)), body(std::move(info.body)),
+      security_definer(info.security_definer) {
 	this->temporary = info.temporary;
 	this->internal = info.internal;
 	this->dependencies = info.dependencies;
@@ -24,6 +25,7 @@ unique_ptr<CreateInfo> ProcedureCatalogEntry::GetInfo() const {
 	info->return_type = return_type;
 	info->language = language;
 	info->body = body;
+	info->security_definer = security_definer;
 	info->dependencies = dependencies;
 	info->temporary = temporary;
 	info->internal = internal;

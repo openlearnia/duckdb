@@ -1487,6 +1487,12 @@ public:
 	static void InitializeProcedureParameterTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeProcedureParameterTrampoline(PEGTransformer &transformer,
 	                                                                             GeneratedTransformProcess &process);
+	static void InitializeSecurityModifierTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeSecurityModifierTrampoline(PEGTransformer &transformer,
+	                                                                           GeneratedTransformProcess &process);
+	static void InitializeSecurityTypeTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeSecurityTypeTrampoline(PEGTransformer &transformer,
+	                                                                       GeneratedTransformProcess &process);
 	static void InitializeCreateSchemaStmtTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeCreateSchemaStmtTrampoline(PEGTransformer &transformer,
 	                                                                           GeneratedTransformProcess &process);
@@ -4436,11 +4442,10 @@ public:
 	                                                                unique_ptr<ParsedExpression> expression);
 	static unique_ptr<MacroFunction>
 	TransformTableMacroDefinition(PEGTransformer &transformer, unique_ptr<SelectStatement> select_statement_internal);
-	static unique_ptr<CreateStatement>
-	TransformCreateProcedureStmt(PEGTransformer &transformer, const optional<bool> &if_not_exists,
-	                             const QualifiedName &qualified_name,
-	                             optional<vector<MacroParameter>> procedure_parameters, const LogicalType &type,
-	                             const Identifier &identifier, const string &string_literal);
+	static unique_ptr<CreateStatement> TransformCreateProcedureStmt(
+	    PEGTransformer &transformer, const optional<bool> &if_not_exists, const QualifiedName &qualified_name,
+	    optional<vector<MacroParameter>> procedure_parameters, const LogicalType &type, const Identifier &identifier,
+	    optional<string> security_type, const string &string_literal);
 	static vector<MacroParameter> TransformProcedureParameters(PEGTransformer &transformer,
 	                                                           vector<MacroParameter> procedure_parameter);
 	static MacroParameter TransformProcedureParameter(PEGTransformer &transformer, const Identifier &col_id,

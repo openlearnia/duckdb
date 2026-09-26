@@ -160,6 +160,7 @@ void CreateProcedureInfo::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<LogicalType>(203, "return_type", return_type);
 	serializer.WritePropertyWithDefault<string>(204, "language", language);
 	serializer.WritePropertyWithDefault<string>(205, "body", body);
+	serializer.WritePropertyWithDefault<bool>(206, "security_definer", security_definer, false);
 }
 
 unique_ptr<CreateInfo> CreateProcedureInfo::Deserialize(Deserializer &deserializer) {
@@ -170,6 +171,7 @@ unique_ptr<CreateInfo> CreateProcedureInfo::Deserialize(Deserializer &deserializ
 	deserializer.ReadProperty<LogicalType>(203, "return_type", result->return_type);
 	deserializer.ReadPropertyWithDefault<string>(204, "language", result->language);
 	deserializer.ReadPropertyWithDefault<string>(205, "body", result->body);
+	deserializer.ReadPropertyWithExplicitDefault<bool>(206, "security_definer", result->security_definer, false);
 	result->SetName(std::move(name));
 	return std::move(result);
 }

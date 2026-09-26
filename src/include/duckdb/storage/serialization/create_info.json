@@ -496,6 +496,12 @@
         "id": 205,
         "name": "body",
         "type": "string"
+      },
+      {
+        "id": 206,
+        "name": "security_definer",
+        "type": "bool",
+        "default": "false"
       }
     ],
     "methods": {

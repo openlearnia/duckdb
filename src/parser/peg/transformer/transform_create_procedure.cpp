@@ -27,7 +27,7 @@ static bool IsJavaScriptIdentifier(const string &name) {
 unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateProcedureStmt(
     PEGTransformer &transformer, const optional<bool> &if_not_exists, const QualifiedName &qualified_name,
     optional<vector<MacroParameter>> procedure_parameters, const LogicalType &type, const Identifier &identifier,
-    const string &string_literal) {
+    optional<string> security_type, const string &string_literal) {
 	auto result = make_uniq<CreateStatement>();
 	auto info = make_uniq<CreateProcedureInfo>();
 
@@ -36,6 +36,16 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateProcedureStmt(
 	info->return_type = type;
 	info->language = StringUtil::Lower(identifier.GetIdentifierName());
 	info->body = string_literal;
+	// Absent SECURITY clause means INVOKER, matching PostgreSQL.
+	info->security_definer = false;
+	if (security_type) {
+		auto lowered = StringUtil::Lower(*security_type);
+		if (lowered == "definer") {
+			info->security_definer = true;
+		} else if (lowered != "invoker") {
+			throw ParserException("Unsupported SECURITY type '%s' - expected INVOKER or DEFINER", *security_type);
+		}
+	}
 
 	if (info->language != "javascript") {
 		throw ParserException("Unsupported procedure language '%s'", identifier.GetIdentifierName());

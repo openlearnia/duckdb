@@ -86,6 +86,8 @@ struct ProcedureSqlApi {
 	int nesting_depth = 0;
 	//! True while the explicit duckdb.transaction callback owns the connection transaction.
 	bool transaction_active = false;
+	//! Declared SECURITY DEFINER: transaction control is refused, as in PostgreSQL.
+	bool security_definer = false;
 	//! SQL execution errors invalidate the DuckDB transaction even if JavaScript catches them.
 	bool transaction_rollback_only = false;
 	string transaction_error;
@@ -751,6 +753,12 @@ static JSValue JsCallTransaction(JSContext *js_context, JSValueConst this_val, i
 	    api->transaction_phase == ProcedureTransactionPhase::DRAINING) {
 		return JS_ThrowInternalError(js_context, "duckdb.transaction cannot be nested");
 	}
+	// PostgreSQL forbids transaction control inside a SECURITY DEFINER routine, because the
+	// body runs with the creator's privileges and could commit work the caller never saw.
+	if (api->security_definer) {
+		return JS_ThrowInternalError(
+		    js_context, "duckdb.transaction cannot be used inside a SECURITY DEFINER procedure");
+	}
 
 	JSValue resolving_funcs[2];
 	auto promise = JS_NewPromiseCapability(js_context, resolving_funcs);
@@ -1115,6 +1123,7 @@ SourceResultType PhysicalCallProcedure::GetDataInternal(ExecutionContext &contex
 	// Owns the nested SQL connection for the duration of this invocation; the QuickJS
 	// runtime points at it through its opaque handle so every `duckdb.*` call reaches it.
 	ProcedureSqlApi sql_api(context.client);
+	sql_api.security_definer = procedure.security_definer;
 
 	auto runtime = JS_NewRuntime();
 	if (!runtime) {

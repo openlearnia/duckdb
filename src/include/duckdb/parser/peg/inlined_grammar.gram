@@ -932,11 +932,15 @@ SimpleParameter <- TypeFuncName Type?
 ScalarMacroDefinition <- Expression
 TableMacroDefinition <- 'TABLE' SelectStatementInternal
 
-CreateProcedureStmt <- 'PROCEDURE' IfNotExists? QualifiedName Parens(ProcedureParameters?) 'RETURNS' Type 'LANGUAGE' Identifier 'AS' StringLiteral
+CreateProcedureStmt <- 'PROCEDURE' IfNotExists? QualifiedName Parens(ProcedureParameters?) 'RETURNS' Type 'LANGUAGE' Identifier SecurityModifier? 'AS' StringLiteral
 
 ProcedureParameters <- List(ProcedureParameter)
 
 ProcedureParameter <- ColId Type
+
+SecurityModifier <- 'SECURITY' SecurityType
+
+SecurityType <- 'INVOKER' / 'DEFINER'
 
 CreateSchemaStmt <- 'SCHEMA' IfNotExists? QualifiedName
 CreateSecretStmt <- 'SECRET' IfNotExists? SecretName? SecretStorageSpecifier? GenericCopyOptionList

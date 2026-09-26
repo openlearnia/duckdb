@@ -21,6 +21,10 @@ struct CreateProcedureInfo : public CreateFunctionInfo {
 	LogicalType return_type;
 	string language;
 	string body;
+	//! Declared SECURITY DEFINER rather than the default SECURITY INVOKER. Recorded and
+	//! propagated to providers; it also disables transaction control in the body, matching
+	//! PostgreSQL, where a definer routine may not commit work its caller cannot see.
+	bool security_definer = false;
 
 public:
 	unique_ptr<CreateInfo> Copy() const override;

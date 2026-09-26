@@ -1,5 +1,7 @@
 #include "duckdb/catalog/catalog_entry/procedure_catalog_entry.hpp"
 #include "duckdb/catalog/entry_lookup_info.hpp"
+#include "duckdb/main/authorization_provider.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
@@ -21,6 +23,12 @@ BoundStatement Binder::Bind(CallStatement &stmt) {
 	auto procedure_entry = GetCatalogEntry(procedure_lookup, OnEntryNotFound::RETURN_NULL);
 	if (procedure_entry) {
 		auto &procedure = procedure_entry->Cast<ProcedureCatalogEntry>();
+		if (!AuthorizationProvider::ShouldSkipCatalog(procedure.catalog.GetName().GetIdentifierName())) {
+			DBConfig::GetConfig(context)
+			    .GetAuthorizationProvider()
+			    .CheckExecuteRoutine(context, procedure.catalog, procedure.schema.name.GetIdentifierName(),
+			                         procedure.name.GetIdentifierName(), procedure.security_definer);
+		}
 		auto &call_arguments = function.GetArguments();
 		if (call_arguments.size() != procedure.parameter_types.size()) {
 			throw BinderException("Procedure '%s' expects %llu arguments but %llu were provided",

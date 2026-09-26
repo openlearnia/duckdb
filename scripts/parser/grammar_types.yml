@@ -1041,6 +1041,8 @@ String:
   rules:
     - StringLiteral
     - DropOrSet
+    - SecurityModifier
+    - SecurityType
     - SequenceName
     - DottedIdentifierString
     - DotColLabel
