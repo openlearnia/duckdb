@@ -832,6 +832,8 @@ void SQLLogicTestRunner::ExecuteInternal(SQLLogicParser &parser, const string &s
 void SQLLogicTestRunner::ExecuteScript(SQLLogicParser &parser, const string &script) {
 	auto &test_config = TestConfiguration::Get();
 	idx_t skip_level = 0;
+	//! Retry timeout for the next query, set by a `waitfor` block
+	idx_t command_wait_timeout_ms = 0;
 	bool test_expr_executed = false;
 	bool file_tags_expr_seen = false;
 	vector<string> file_tags; // gets both implicit and file-spec'd
@@ -906,7 +908,8 @@ void SQLLogicTestRunner::ExecuteScript(SQLLogicParser &parser, const string &scr
 		}
 		if (skip_level > 0 && token.type != SQLLogicTokenType::SQLLOGIC_MODE) {
 			if (token.type == SQLLogicTokenType::SQLLOGIC_STATEMENT ||
-			    token.type == SQLLogicTokenType::SQLLOGIC_QUERY) {
+			    token.type == SQLLogicTokenType::SQLLOGIC_QUERY ||
+			    token.type == SQLLogicTokenType::SQLLOGIC_WAITFOR) {
 				CountSkipMode();
 			}
 			continue;
@@ -958,15 +961,31 @@ void SQLLogicTestRunner::ExecuteScript(SQLLogicParser &parser, const string &scr
 			command->conditions = std::move(conditions);
 			ExecuteCommand(std::move(command));
 			output_result_mode = original_output_result_mode;
-		} else if (token.type == SQLLogicTokenType::SQLLOGIC_QUERY) {
-			if (token.parameters.size() < 1) {
+		} else if (token.type == SQLLogicTokenType::SQLLOGIC_QUERY ||
+		           token.type == SQLLogicTokenType::SQLLOGIC_WAITFOR) {
+			// waitfor <timeout_ms> <types> is a query that is retried until it matches
+			bool is_waitfor = token.type == SQLLogicTokenType::SQLLOGIC_WAITFOR;
+			idx_t type_offset = 0;
+			if (is_waitfor) {
+				if (token.parameters.size() < 2) {
+					parser.Fail("waitfor requires a timeout in milliseconds and a type string (waitfor 5000 I)");
+				}
+				try {
+					command_wait_timeout_ms = NumericCast<idx_t>(std::stoll(token.parameters[0]));
+				} catch (...) {
+					parser.Fail("waitfor timeout must be a number of milliseconds");
+				}
+				type_offset = 1;
+			} else if (token.parameters.size() < 1) {
 				parser.Fail("query requires at least one parameter (query III)");
 			}
 			auto command = make_uniq<Query>(*this);
+			command->wait_timeout_ms = command_wait_timeout_ms;
+			command_wait_timeout_ms = 0;
 
 			// parse the expected column count
 			command->expected_column_count = 0;
-			auto &column_text = token.parameters[0];
+			auto &column_text = token.parameters[type_offset];
 			for (idx_t i = 0; i < column_text.size(); i++) {
 				command->expected_column_count++;
 				if (column_text[i] != 'T' && column_text[i] != 'I' && column_text[i] != 'R') {
@@ -993,13 +1012,13 @@ void SQLLogicTestRunner::ExecuteScript(SQLLogicParser &parser, const string &scr
 
 			// figure out the sort style/connection style
 			string sort_style = "none";
-			if (token.parameters.size() > 1) {
-				if (!TestConfiguration::TryParseSortStyle(token.parameters[1], command->sort_style)) {
+			if (token.parameters.size() > type_offset + 1) {
+				if (!TestConfiguration::TryParseSortStyle(token.parameters[type_offset + 1], command->sort_style)) {
 					// if this is not a known sort style, we use this as the connection name
 					// this is a bit dirty, but well
-					command->connection_name = token.parameters[1];
+					command->connection_name = token.parameters[type_offset + 1];
 				} else {
-					sort_style = token.parameters[1];
+					sort_style = token.parameters[type_offset + 1];
 				}
 			}
 			if (!TestConfiguration::TryParseSortStyle(sort_style, command->sort_style)) {
@@ -1007,9 +1026,9 @@ void SQLLogicTestRunner::ExecuteScript(SQLLogicParser &parser, const string &scr
 			}
 
 			// check the label of the query
-			if (token.parameters.size() > 2) {
+			if (token.parameters.size() > type_offset + 2) {
 				command->query_has_label = true;
-				command->query_label = token.parameters[2];
+				command->query_label = token.parameters[type_offset + 2];
 			} else {
 				command->query_has_label = false;
 			}

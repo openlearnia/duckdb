@@ -23,7 +23,9 @@ public:
 	SQLLogicTestRunner &runner;
 
 public:
-	bool CheckQueryResult(const Query &query, ExecuteContext &context, duckdb::unique_ptr<QueryResult> owned_result);
+	//! `print_error` suppresses failure reporting, for callers that retry on mismatch
+	bool CheckQueryResult(const Query &query, ExecuteContext &context, duckdb::unique_ptr<QueryResult> owned_result,
+	                      bool print_error = true);
 	bool CheckStatementResult(const Statement &statement, ExecuteContext &context,
 	                          duckdb::unique_ptr<QueryResult> owned_result);
 	string SQLLogicTestConvertValue(Value value, LogicalType sql_type, bool original_sqlite_test);

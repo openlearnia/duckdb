@@ -81,6 +81,12 @@ Test directives:
 - `----` - Separates query from expected results
 - `<REGEX>:` - Expected error message pattern
 - `require-env VAR` - Test requires environment variable
+- `waitfor <ms> <types>` - Query re-run until it matches, or `<ms>` elapses. Prefer this over
+  `sleep_ms` when a test waits on background work: it returns as soon as the condition holds
+  instead of guessing a duration, and reports the usual mismatch only after the timeout.
+  Accepts the same optional sort style and label as `query`, e.g. `waitfor 5000 I rowsort`.
+  Note a `waitfor` that never matches still fails the test, and neither the timeout nor the
+  parse errors for a malformed `waitfor` can be asserted from inside a `.test` file.
 
 Slow tests should use `.test_slow` extension instead of `.test`.
 

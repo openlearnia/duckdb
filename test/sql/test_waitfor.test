@@ -1,0 +1,37 @@
+# name: test/sql/test_waitfor.test
+# description: the waitfor directive retries a query until it matches or its timeout elapses
+# group: [test_harness]
+
+statement ok
+CREATE SEQUENCE waitfor_seq
+
+statement ok
+CREATE TABLE waitfor_t(i INTEGER)
+
+statement ok
+INSERT INTO waitfor_t VALUES (1), (2), (3)
+
+# a matching result passes immediately
+waitfor 10000 I
+SELECT count(*) FROM waitfor_t
+----
+3
+
+# the retried query really is re-executed: a single run would yield 1 (false),
+# so reaching true proves the loop polled more than once
+waitfor 10000 I
+SELECT nextval('waitfor_seq') >= 3
+----
+true
+
+# waitfor also accepts a sort style, like query
+waitfor 10000 I nosort
+SELECT count(*) FROM waitfor_t
+----
+3
+
+# a plain query is unaffected by having used waitfor before it
+query I
+SELECT 1
+----
+1

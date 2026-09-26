@@ -126,6 +126,8 @@ public:
 	vector<string> values;
 	bool query_has_label = false;
 	string query_label;
+	//! When set, re-run the query until it matches or this many milliseconds elapse (0 = run once)
+	idx_t wait_timeout_ms = 0;
 
 public:
 	void ExecuteInternal(ExecuteContext &context) const override;

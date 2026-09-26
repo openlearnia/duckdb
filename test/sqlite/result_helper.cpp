@@ -61,7 +61,7 @@ void TestResultHelper::SortQueryResult(SortStyle sort_style, vector<string> &res
 }
 
 bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &context,
-                                        duckdb::unique_ptr<QueryResult> owned_result) {
+                                        duckdb::unique_ptr<QueryResult> owned_result, bool print_error) {
 	auto &result = *owned_result;
 	auto &runner = query.runner;
 	auto expected_column_count = query.expected_column_count;
@@ -77,7 +77,7 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 			return true;
 		}
 		runner.last_error_message = result.GetError();
-		if (!FailureSummary::SkipLoggingSameError(context.error_file)) {
+		if (print_error && !FailureSummary::SkipLoggingSameError(context.error_file)) {
 			logger.UnexpectedFailure(result);
 		}
 		return false;
@@ -103,7 +103,9 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
 		auto &original_error = error.Message();
-		logger.LogFailure(original_error);
+		if (print_error) {
+			logger.LogFailure(original_error);
+		}
 		return false;
 	}
 
@@ -118,9 +120,9 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 		comparison_values =
 		    LoadResultFromFile(fname, IdentifiersToStrings(result.GetNames()), expected_column_count, csv_error);
 		if (!csv_error.empty()) {
-			string log_message;
-			logger.PrintErrorHeader(csv_error);
-
+			if (print_error) {
+				logger.PrintErrorHeader(csv_error);
+			}
 			return false;
 		}
 	} else {
@@ -177,18 +179,22 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 			expected_rows = comparison_values.size();
 			row_wise = true;
 		} else if (comparison_values.size() % expected_column_count != 0) {
-			if (column_count_mismatch) {
-				logger.ColumnCountMismatch(result, query.values, original_expected_columns, row_wise);
-			} else {
-				logger.NotCleanlyDivisible(expected_column_count, comparison_values.size());
+			if (print_error) {
+				if (column_count_mismatch) {
+					logger.ColumnCountMismatch(result, query.values, original_expected_columns, row_wise);
+				} else {
+					logger.NotCleanlyDivisible(expected_column_count, comparison_values.size());
+				}
 			}
 			return false;
 		}
 		if (expected_rows != result.RowCount()) {
-			if (column_count_mismatch) {
-				logger.ColumnCountMismatch(result, query.values, original_expected_columns, row_wise);
-			} else {
-				logger.WrongRowCount(expected_rows, result, comparison_values, expected_column_count, row_wise);
+			if (print_error) {
+				if (column_count_mismatch) {
+					logger.ColumnCountMismatch(result, query.values, original_expected_columns, row_wise);
+				} else {
+					logger.WrongRowCount(expected_rows, result, comparison_values, expected_column_count, row_wise);
+				}
 			}
 			return false;
 		}
@@ -200,10 +206,12 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 				// split based on tab character
 				auto splits = StringUtil::Split(comparison_values[i], "\t");
 				if (splits.size() != expected_column_count) {
-					if (column_count_mismatch) {
-						logger.ColumnCountMismatch(result, query.values, original_expected_columns, row_wise);
+					if (print_error) {
+						if (column_count_mismatch) {
+							logger.ColumnCountMismatch(result, query.values, original_expected_columns, row_wise);
+						}
+						logger.SplitMismatch(i + 1, expected_column_count, splits.size());
 					}
-					logger.SplitMismatch(i + 1, expected_column_count, splits.size());
 					return false;
 				}
 				for (auto &split : splits) {
@@ -224,7 +232,8 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 				success = CompareValues(logger, result,
 				                        result_values_string[current_row * expected_column_count + current_column],
 				                        comparison_values[i], current_row, current_column, comparison_values,
-				                        expected_column_count, row_wise, result_values_string, final_iteration);
+				                        expected_column_count, row_wise, result_values_string,
+				                        print_error && final_iteration);
 				if (!success) {
 					break;
 				}
@@ -245,7 +254,9 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 			}
 		}
 		if (column_count_mismatch) {
-			logger.ColumnCountMismatchCorrectResult(original_expected_columns, expected_column_count, result);
+			if (print_error) {
+				logger.ColumnCountMismatchCorrectResult(original_expected_columns, expected_column_count, result);
+			}
 			return false;
 		}
 	} else {
@@ -269,14 +280,16 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 			hash_compare_error = expected_hash != hash_value;
 		}
 		if (hash_compare_error) {
-			string expected_result;
-			runner.hash_label_map.WithLock([&](unordered_map<string, CachedLabelData> &map) {
-				auto it = map.find(query_label);
-				if (it != map.end()) {
-					expected_result = it->second.result_str;
-				}
-				logger.WrongResultHash(expected_result, result, expected_hash, hash_value);
-			});
+			if (print_error) {
+				string expected_result;
+				runner.hash_label_map.WithLock([&](unordered_map<string, CachedLabelData> &map) {
+					auto it = map.find(query_label);
+					if (it != map.end()) {
+						expected_result = it->second.result_str;
+					}
+					logger.WrongResultHash(expected_result, result, expected_hash, hash_value);
+				});
+			}
 			return false;
 		}
 		TEST_REQUIRE(!hash_compare_error);

@@ -22,6 +22,9 @@
 
 namespace duckdb {
 
+//! Delay between attempts of a `waitfor` query
+static constexpr idx_t WAITFOR_POLL_INTERVAL_MS = 10;
+
 static void query_break(int line) {
 	(void)line;
 }
@@ -808,6 +811,37 @@ void Query::ExecuteInternal(ExecuteContext &context) const {
 			return;
 		}
 	}
+	if (wait_timeout_ms > 0) {
+		// re-run until the result matches, so a test can wait on background work instead of
+		// sleeping for a guessed duration. Mismatches stay silent until the deadline passes.
+		auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(wait_timeout_ms);
+		TestResultHelper helper(runner);
+		while (true) {
+			auto attempt = ExecuteQuery(context, connection, file_name, query_line);
+			if (helper.CheckQueryResult(*this, context, std::move(attempt), false)) {
+				return;
+			}
+			if (std::chrono::steady_clock::now() >= deadline) {
+				break;
+			}
+			std::this_thread::sleep_for(std::chrono::milliseconds(WAITFOR_POLL_INTERVAL_MS));
+			TEST_ASSERTION();
+		}
+		// deadline passed: run once more with reporting on to produce the usual failure output
+		auto result = ExecuteQuery(context, connection, file_name, query_line);
+		if (!helper.CheckQueryResult(*this, context, std::move(result), true)) {
+			if (context.is_parallel) {
+				runner.finished_processing_file = true;
+				context.error_file = file_name;
+				context.error_line = query_line;
+			} else {
+				runner.test_failure_locator = StringUtil::Format("%s:%d", file_name, query_line);
+				TEST_FAIL_LINE(file_name, query_line, "");
+			}
+		}
+		return;
+	}
+
 	auto result = ExecuteQuery(context, connection, file_name, query_line);
 
 	TestResultHelper helper(runner);

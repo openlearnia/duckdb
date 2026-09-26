@@ -261,6 +261,7 @@ bool SQLLogicParser::IsSingleLineStatement(SQLLogicToken &token) {
 	case SQLLogicTokenType::SQLLOGIC_INVALID:
 	case SQLLogicTokenType::SQLLOGIC_STATEMENT:
 	case SQLLogicTokenType::SQLLOGIC_QUERY:
+	case SQLLogicTokenType::SQLLOGIC_WAITFOR:
 		return false;
 
 	default:
@@ -273,6 +274,7 @@ bool SQLLogicParser::IsTestCommand(SQLLogicTokenType &type) {
 	switch (type) {
 	case SQLLogicTokenType::SQLLOGIC_QUERY:
 	case SQLLogicTokenType::SQLLOGIC_STATEMENT:
+	case SQLLogicTokenType::SQLLOGIC_WAITFOR:
 		return true;
 
 	case SQLLogicTokenType::SQLLOGIC_CONCURRENT_FOREACH:
@@ -315,6 +317,8 @@ SQLLogicTokenType SQLLogicParser::CommandToToken(const string &token) {
 		return SQLLogicTokenType::SQLLOGIC_STATEMENT;
 	} else if (token == "query") {
 		return SQLLogicTokenType::SQLLOGIC_QUERY;
+	} else if (token == "waitfor") {
+		return SQLLogicTokenType::SQLLOGIC_WAITFOR;
 	} else if (token == "hash-threshold") {
 		return SQLLogicTokenType::SQLLOGIC_HASH_THRESHOLD;
 	} else if (token == "halt") {
