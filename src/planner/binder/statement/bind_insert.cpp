@@ -1,3 +1,4 @@
+#include "duckdb/main/config.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
@@ -607,6 +608,10 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 		                       TableCatalogEntry::Name);
 	}
 	auto &table = table_entry.Cast<TableCatalogEntry>();
+	if (!table.temporary && !AuthorizationProvider::ShouldSkipCatalog(table.ParentCatalog().GetName().GetIdentifierName())) {
+		DBConfig::GetConfig(context).GetAuthorizationProvider().CheckModifyTable(
+		    context, table.ParentCatalog(), AUTH_INSERT, table.ParentSchema().name.GetIdentifierName(), table.name.GetIdentifierName());
+	}
 	if (table.IsMaterializedView()) {
 		throw BinderException("Cannot insert into materialized view \"%s\"", table.name);
 	}

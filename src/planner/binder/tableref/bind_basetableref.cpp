@@ -255,6 +255,13 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		auto table_index = GenerateTableIndex();
 		auto &table = table_or_view->Cast<TableCatalogEntry>();
 
+		// authorization: statement binds this table for reading
+		if (!AuthorizationProvider::ShouldSkipCatalog(table.ParentCatalog().GetName().GetIdentifierName())) {
+			DBConfig::GetConfig(context).GetAuthorizationProvider().CheckReadObject(
+			    context, table.ParentCatalog(), false, table.ParentSchema().name.GetIdentifierName(),
+			    table.name.GetIdentifierName());
+		}
+
 		auto &properties = GetStatementProperties();
 		properties.RegisterDBRead(table.ParentCatalog(), context);
 
@@ -303,6 +310,13 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 	case CatalogType::VIEW_ENTRY: {
 		// the node is a view: get the query that the view represents
 		auto &view_catalog_entry = table_or_view->Cast<ViewCatalogEntry>();
+		// authorization: statement binds this view for reading
+		if (!AuthorizationProvider::ShouldSkipCatalog(view_catalog_entry.ParentCatalog().GetName().GetIdentifierName())) {
+			DBConfig::GetConfig(context).GetAuthorizationProvider().CheckReadObject(
+			    context, view_catalog_entry.ParentCatalog(), true,
+			    view_catalog_entry.ParentSchema().name.GetIdentifierName(),
+			    view_catalog_entry.name.GetIdentifierName());
+		}
 		// We need to use a new binder for the view that doesn't reference any CTEs
 		// defined for this binder so there are no collisions between the CTEs defined
 		// for the view and for the current query

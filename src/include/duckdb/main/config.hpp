@@ -37,6 +37,7 @@
 #include "duckdb/common/storage_compatibility.hpp"
 #include "duckdb/common/enums/debug_verification_mode.hpp"
 #include "duckdb/common/enums/debug_order_verification.hpp"
+#include "duckdb/main/authorization_provider.hpp"
 
 namespace duckdb {
 class ArrowTypeExtension;
@@ -328,6 +329,9 @@ public:
 
 	void SetHTTPUtil(const shared_ptr<HTTPUtil> &new_http_util);
 	HTTPUtil &GetHTTPUtil() const;
+	DUCKDB_API void SetAuthorizationProvider(const shared_ptr<AuthorizationProvider> &provider);
+	DUCKDB_API AuthorizationProvider &GetAuthorizationProvider() const;
+	bool HasAuthorizationProvider() const { return authorization_provider != nullptr; }
 	DUCKDB_API HTTPTransportManager &GetHTTPTransportManager();
 	DUCKDB_API const HTTPTransportManager &GetHTTPTransportManager() const;
 
@@ -345,6 +349,7 @@ private:
 	bool is_user_config = true;
 	//! HTTP provider publication and bounded client ownership
 	unique_ptr<HTTPTransportManager> http_transport_manager;
+	shared_ptr<AuthorizationProvider> authorization_provider;
 };
 
 } // namespace duckdb

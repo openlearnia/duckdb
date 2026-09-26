@@ -1,3 +1,4 @@
+#include "duckdb/main/config.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/catalog/catalog.hpp"
@@ -106,6 +107,9 @@ bool PreparedStatementData::RequireRebind(ClientContext &context,
 	PreparedStatement::VerifyParameters(parameter_values, expected_parameters, verification_context);
 	if (properties.always_require_rebind) {
 		// this statement must always be re-bound
+		return true;
+	}
+	if (DBConfig::GetConfig(context).GetAuthorizationProvider().RequireStatementRebind(context)) {
 		return true;
 	}
 	if (!properties.bound_all_parameters) {

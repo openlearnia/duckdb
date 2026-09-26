@@ -48,6 +48,7 @@ SELECT * FROM mv
 statement ok
 DROP MATERIALIZED VIEW mv
 
-statement error Catalog Error
+statement error
 SELECT * FROM mv
-
+----
+<REGEX>:.*Catalog Error.*

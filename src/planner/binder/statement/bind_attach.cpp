@@ -1,3 +1,4 @@
+#include "duckdb/main/config.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/statement/attach_statement.hpp"
 #include "duckdb/parser/parsed_data/external_resource_options.hpp"
@@ -25,6 +26,7 @@ BoundStatement Binder::Bind(AttachStatement &stmt) {
 	BoundStatement result;
 	result.types = {LogicalType::BOOLEAN};
 	result.names = {"Success"};
+	DBConfig::GetConfig(context).GetAuthorizationProvider().CheckEngineManagement(context);
 
 	// resolve the path expression if set by the parser
 	if (stmt.info->parsed_path) {

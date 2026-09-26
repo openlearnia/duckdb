@@ -4,6 +4,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/query_result.hpp"
@@ -116,6 +117,16 @@ struct ProcedureSqlApi {
 	explicit ProcedureSqlApi(ClientContext &client_p)
 	    : client(client_p), nesting_depth(javascript_procedure_depth), transaction_active(false),
 	      transaction_rollback_only(false), connection(*client_p.db) {
+		// SQL issued by a procedure uses a private connection. Preserve DuckLake's
+		// per-session role so nested SQL authorization runs as the invoking session.
+		optional_ptr<const ConfigurationOption> role_option;
+		auto role_setting = DBConfig::GetConfig(client_p).TryGetSettingIndex(Identifier("ducklake_role"), role_option);
+		if (role_setting.IsValid()) {
+			Value role_value;
+			if (client_p.TryGetCurrentUserSetting(role_setting.GetIndex(), role_value)) {
+				connection.context->config.user_settings.SetUserSetting(role_setting.GetIndex(), std::move(role_value));
+			}
+		}
 		worker = std::thread(&ProcedureSqlApi::WorkerLoop, this);
 	}
 
@@ -1083,6 +1094,9 @@ SourceResultType PhysicalCallProcedure::GetDataInternal(ExecutionContext &contex
                                                         OperatorSourceInput &) const {
 	if (chunk.size() != 0) {
 		return SourceResultType::FINISHED;
+	}
+	if (!context.client.transaction.IsAutoCommit()) {
+		throw InvalidInputException("JavaScript procedures cannot run inside an explicit transaction");
 	}
 	if (javascript_procedure_depth >= kMaxProcedureNesting) {
 		throw InvalidInputException("JavaScript procedure %s (%d): procedures calling procedures "

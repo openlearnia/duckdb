@@ -1,4 +1,6 @@
+#include "duckdb/main/config.hpp"
 #include "duckdb/parser/statement/set_statement.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_set.hpp"
 #include "duckdb/planner/operator/logical_reset.hpp"
@@ -13,6 +15,9 @@ BoundStatement Binder::Bind(SetVariableStatement &stmt) {
 	BoundStatement result;
 	result.types = {LogicalType::BOOLEAN};
 	result.names = {"Success"};
+	if (stmt.scope != SetScope::VARIABLE && StringUtil::CIEquals(stmt.name.GetIdentifierName(), "schema")) {
+		DBConfig::GetConfig(context).GetAuthorizationProvider().CheckEngineManagement(context);
+	}
 
 	// evaluate the scalar value
 	Value value;

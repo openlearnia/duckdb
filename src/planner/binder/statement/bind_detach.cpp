@@ -6,6 +6,9 @@
 namespace duckdb {
 
 BoundStatement Binder::Bind(DetachStatement &stmt) {
+	// authorization: DETACH is engine management
+	DBConfig::GetConfig(context).GetAuthorizationProvider().CheckEngineManagement(context);
+
 	BoundStatement result;
 
 	result.plan = make_uniq<LogicalDetach>(std::move(stmt.info));

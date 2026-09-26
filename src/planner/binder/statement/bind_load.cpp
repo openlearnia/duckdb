@@ -1,3 +1,4 @@
+#include "duckdb/main/config.hpp"
 #include "duckdb/parser/statement/load_statement.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_load.hpp"
@@ -12,6 +13,7 @@ BoundStatement Binder::Bind(LoadStatement &stmt) {
 	BoundStatement result;
 	result.types = LoadInfo::GetResultTypes(stmt.info->load_type);
 	result.names = LoadInfo::GetResultNames(stmt.info->load_type);
+	DBConfig::GetConfig(context).GetAuthorizationProvider().CheckEngineManagement(context);
 
 	// Ensure the repository exists if it's an alias
 	if (!stmt.info->repository.empty() && stmt.info->repo_is_alias) {

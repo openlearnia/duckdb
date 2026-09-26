@@ -1,3 +1,4 @@
+#include "duckdb/main/config.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/statement/merge_into_statement.hpp"
 #include "duckdb/parser/query_node/merge_query_node.hpp"
@@ -222,6 +223,11 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 		throw BinderException("Can only merge into base tables!");
 	}
 	auto &table = *table_ptr;
+	if (!table.temporary && !AuthorizationProvider::ShouldSkipCatalog(table.ParentCatalog().GetName().GetIdentifierName())) {
+		DBConfig::GetConfig(context).GetAuthorizationProvider().CheckModifyTable(
+		    context, table.ParentCatalog(), AUTH_INSERT | AUTH_UPDATE | AUTH_DELETE, table.ParentSchema().name.GetIdentifierName(),
+		    table.name.GetIdentifierName());
+	}
 
 	bool has_triggers = false;
 	auto transaction = table.ParentCatalog().GetCatalogTransaction(context);

@@ -1,3 +1,4 @@
+#include "duckdb/main/config.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/trigger_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
@@ -854,6 +855,27 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	BoundStatement result;
 	result.names = {"Count"};
 	result.types = {LogicalType::BIGINT};
+
+	// authorization: CREATE of a catalog object (table/view/schema/macro/...)
+	{
+		// `BindSchemaOrCatalog` rewrites a lone qualifier ("x.y") into an explicit
+		// catalog + schema pair, so it needs the mutable accessor. `Catalog()` and
+		// `Schema()` are exactly the `catalog`/`schema` fields this used to read:
+		// catalog is path[0] when fully qualified, schema is the element before the name.
+		BindSchemaOrCatalog(stmt.info->GetQualifiedNameMutable());
+		const auto &qualified_name = stmt.info->GetQualifiedName();
+		const auto &catalog_name = qualified_name.Catalog();
+		const auto &schema_name = qualified_name.Schema();
+		auto bound_catalog = Catalog::GetCatalogEntry(context, catalog_name);
+		if (bound_catalog &&
+		    !AuthorizationProvider::ShouldSkipCatalog(bound_catalog->GetName().GetIdentifierName())) {
+			const string schema_arg = schema_name.empty() ? string("main") : schema_name.GetIdentifierName();
+			const string object_arg =
+			    stmt.info->type == CatalogType::SCHEMA_ENTRY ? schema_name.GetIdentifierName() : string();
+			DBConfig::GetConfig(context).GetAuthorizationProvider().CheckModifySchema(
+			    context, *bound_catalog, AUTH_CREATE, schema_arg, object_arg);
+		}
+	}
 
 	auto catalog_type = stmt.info->type;
 	auto return_type = StatementReturnType::NOTHING;

@@ -1,4 +1,5 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/parser/query_node/update_query_node.hpp"
@@ -171,6 +172,10 @@ BoundStatement Binder::BindNode(UpdateQueryNode &node) {
 		throw BinderException("Can only update base table");
 	}
 	auto &table = *table_ptr;
+	if (!table.temporary && !AuthorizationProvider::ShouldSkipCatalog(table.ParentCatalog().GetName().GetIdentifierName())) {
+		DBConfig::GetConfig(context).GetAuthorizationProvider().CheckModifyTable(
+		    context, table.ParentCatalog(), AUTH_UPDATE, table.ParentSchema().name.GetIdentifierName(), table.name.GetIdentifierName());
+	}
 	if (table.IsMaterializedView()) {
 		throw BinderException("Cannot update materialized view \"%s\"", table.name);
 	}

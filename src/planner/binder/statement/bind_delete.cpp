@@ -1,3 +1,4 @@
+#include "duckdb/main/config.hpp"
 #include "duckdb/parser/statement/delete_statement.hpp"
 #include "duckdb/parser/query_node/delete_query_node.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -29,6 +30,10 @@ BoundStatement Binder::BindNode(DeleteQueryNode &node) {
 		throw BinderException("Can only delete from base table");
 	}
 	auto &table = *table_ptr;
+	if (!table.temporary && !AuthorizationProvider::ShouldSkipCatalog(table.ParentCatalog().GetName().GetIdentifierName())) {
+		DBConfig::GetConfig(context).GetAuthorizationProvider().CheckModifyTable(
+		    context, table.ParentCatalog(), AUTH_DELETE, table.ParentSchema().name.GetIdentifierName(), table.name.GetIdentifierName());
+	}
 	if (table.IsMaterializedView()) {
 		throw BinderException("Cannot delete from materialized view \"%s\"", table.name);
 	}

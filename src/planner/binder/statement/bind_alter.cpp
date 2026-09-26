@@ -1,3 +1,4 @@
+#include "duckdb/main/config.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
@@ -115,6 +116,17 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 
 	// resolve the (possibly nested) catalog/schema qualification of the altered entry
 	stmt.info->SetQualifiedName(BindTableName(stmt.info->GetQualifiedName()));
+	{
+		auto &catalog = Catalog::GetCatalog(context, stmt.info->GetQualifiedName().Catalog());
+		if (!AuthorizationProvider::ShouldSkipCatalog(catalog.GetName().GetIdentifierName())) {
+			const auto &qualified_name = stmt.info->GetQualifiedName();
+			const auto schema_name = qualified_name.Path().size() > 1
+			                             ? qualified_name.Path()[qualified_name.Path().size() - 2].GetIdentifierName()
+			                             : "main";
+			DBConfig::GetConfig(context).GetAuthorizationProvider().CheckModifySchema(
+			    context, catalog, AUTH_ALTER, schema_name, qualified_name.Name().GetIdentifierName());
+		}
+	}
 
 	optional_ptr<CatalogEntry> entry;
 	if (stmt.info->type == AlterType::SET_COLUMN_COMMENT) {

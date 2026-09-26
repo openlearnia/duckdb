@@ -1007,6 +1007,15 @@ void DBConfig::SetHTTPUtil(const shared_ptr<HTTPUtil> &new_http_util) {
 	http_transport_manager->SetHTTPUtil(new_http_util);
 }
 
+void DBConfig::SetAuthorizationProvider(const shared_ptr<AuthorizationProvider> &provider) {
+	authorization_provider = provider;
+}
+
+AuthorizationProvider &DBConfig::GetAuthorizationProvider() const {
+	static NullAuthorizationProvider null_provider;
+	return authorization_provider ? *authorization_provider : null_provider;
+}
+
 HTTPUtil &DBConfig::GetHTTPUtil() const {
 	return http_transport_manager->GetHTTPUtil();
 }

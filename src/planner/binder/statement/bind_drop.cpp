@@ -48,6 +48,14 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 		// dropping a schema is never read-only because there are no temporary schemas. The catalog is the leading
 		// component of the resolved path ([catalog, parent schemas..., schema])
 		auto &catalog = Catalog::GetCatalog(context, stmt.info->GetQualifiedName().Path().front());
+		if (!AuthorizationProvider::ShouldSkipCatalog(catalog.GetName().GetIdentifierName())) {
+			const auto &qualified_name = stmt.info->GetQualifiedName();
+			const auto schema_name = qualified_name.Path().size() > 1
+			                             ? qualified_name.Path()[qualified_name.Path().size() - 2].GetIdentifierName()
+			                             : "main";
+			DBConfig::GetConfig(context).GetAuthorizationProvider().CheckModifySchema(
+			    context, catalog, AUTH_DROP, schema_name, qualified_name.Name().GetIdentifierName());
+		}
 		properties.RegisterDBModify(catalog, context, DatabaseModificationType::DROP_CATALOG_ENTRY);
 		break;
 	}
@@ -94,6 +102,10 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 		}
 		if (!entry) {
 			break;
+		}
+		if (catalog && !AuthorizationProvider::ShouldSkipCatalog(catalog->GetName().GetIdentifierName())) {
+			DBConfig::GetConfig(context).GetAuthorizationProvider().CheckModifySchema(
+			    context, *catalog, AUTH_DROP, entry->ParentSchema().name.GetIdentifierName(), entry->name.GetIdentifierName());
 		}
 		if (stmt.info->type == CatalogType::TABLE_ENTRY) {
 			auto &table = entry->Cast<TableCatalogEntry>();
