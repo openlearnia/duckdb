@@ -229,11 +229,10 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 			idx_t current_row = 0, current_column = 0;
 			bool success = true;
 			for (idx_t i = 0; i < total_value_count && i < comparison_values.size(); i++) {
-				success = CompareValues(logger, result,
-				                        result_values_string[current_row * expected_column_count + current_column],
-				                        comparison_values[i], current_row, current_column, comparison_values,
-				                        expected_column_count, row_wise, result_values_string,
-				                        print_error && final_iteration);
+				success = CompareValues(
+				    logger, result, result_values_string[current_row * expected_column_count + current_column],
+				    comparison_values[i], current_row, current_column, comparison_values, expected_column_count,
+				    row_wise, result_values_string, print_error && final_iteration);
 				if (!success) {
 					break;
 				}

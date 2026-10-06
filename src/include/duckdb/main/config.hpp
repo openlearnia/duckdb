@@ -331,7 +331,9 @@ public:
 	HTTPUtil &GetHTTPUtil() const;
 	DUCKDB_API void SetAuthorizationProvider(const shared_ptr<AuthorizationProvider> &provider);
 	DUCKDB_API AuthorizationProvider &GetAuthorizationProvider() const;
-	bool HasAuthorizationProvider() const { return authorization_provider != nullptr; }
+	bool HasAuthorizationProvider() const {
+		return authorization_provider != nullptr;
+	}
 	DUCKDB_API HTTPTransportManager &GetHTTPTransportManager();
 	DUCKDB_API const HTTPTransportManager &GetHTTPTransportManager() const;
 

@@ -908,8 +908,7 @@ void SQLLogicTestRunner::ExecuteScript(SQLLogicParser &parser, const string &scr
 		}
 		if (skip_level > 0 && token.type != SQLLogicTokenType::SQLLOGIC_MODE) {
 			if (token.type == SQLLogicTokenType::SQLLOGIC_STATEMENT ||
-			    token.type == SQLLogicTokenType::SQLLOGIC_QUERY ||
-			    token.type == SQLLogicTokenType::SQLLOGIC_WAITFOR) {
+			    token.type == SQLLogicTokenType::SQLLOGIC_QUERY || token.type == SQLLogicTokenType::SQLLOGIC_WAITFOR) {
 				CountSkipMode();
 			}
 			continue;
@@ -1313,6 +1312,7 @@ void SQLLogicTestRunner::ExecuteScript(SQLLogicParser &parser, const string &scr
 			auto sleep_duration = std::stoull(token.parameters[0]);
 			auto sleep_unit = SleepCommand::ParseUnit(token.parameters[1]);
 			auto command = make_uniq<SleepCommand>(*this, sleep_duration, sleep_unit);
+			command->conditions = std::move(conditions);
 			ExecuteCommand(std::move(command));
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_UNZIP) {
 			if (token.parameters.size() != 1 && token.parameters.size() != 2) {

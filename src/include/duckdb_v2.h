@@ -5939,6 +5939,32 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_query_progress_get_total_rows_to_process(
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_query_progress_destroy(duckdb_v2_query_progress_handle *progress);
 
+/*!
+ * Captures a snapshot of the active query's execution progress.
+ *
+ * Reads the percentage and row counts from one consistent snapshot of the query currently executing on the connection.
+ * Safe to call from any thread, including while another thread steps the query's result.
+ *
+ * Progress is published only when the enable_progress_bar option is set; the bridge does not enable tracking itself.
+ * Both row counts are 0 when no information is available. The percentage is -1 when tracking is disabled, no query is
+ * active, or no progress has been published yet.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param conn The connection handle.
+ * @param out_percentage Receives the percentage complete in [0, 100], -1 if tracking is disabled, no query is active,
+ * or no progress has been published yet.
+ * @param out_rows_processed Receives the number of rows processed so far.
+ * @param out_total_rows_to_process Receives the total number of rows the query will process.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_progress_get(duckdb_v2_connection_handle conn, double *out_percentage,
+                                                               uint64_t *out_rows_processed,
+                                                               uint64_t *out_total_rows_to_process,
+                                                               duckdb_v2_error_info_handle *err);
+
 /* --- Struct definitions for connection --- */
 
 /* ============================================================================
@@ -6217,7 +6243,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_copy_to_set_bind_callback(duckdb_v2_copy_
  * Sets the optional batch size callback of the `COPY ... TO` side.
  *
  * The batch size callback is invoked during query planning, after the bind callback, for each `COPY ... TO` statement
- * that does not set `BATCH_SIZE` itself. It must report how many rows a batch should carry via
+ * that does not set `BATCH_SIZE` itself. It should report how many rows a batch should carry via
  * `duckdb_v2_copy_to_batch_size_set_target()`; the engine then cuts the rows being written into batches of that size
  * and hands each to the batch callback. Without a batch size from either the statement or the callback, a batch is cut
  * for every chunk of rows sunk, i.e. a vector at a time. A batch may still be smaller than the reported size (the last
@@ -6523,7 +6549,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_copy_to_batch_size_get_bind_data(duckdb_v
 
 /*!
  * Sets the number of rows a batch should carry, as the target the engine cuts batches at. The batch size callback must
- * set this to a value greater than 0; the statement fails otherwise.
+ * set this to a value greater than 0; the statement fails otherwise. DuckDB defines the `BATCH_SIZE` on omission of
+ * calling the function.
  *
  * history:
  * - stable: v2.0.0

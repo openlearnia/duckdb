@@ -50,6 +50,7 @@ set(TEST_API_OBJECTS
     test_pending_with_parameters.cpp
     test_parse_statement_iterator.cpp
     test_dialect_extension.cpp
+    test_query_node_copy.cpp
     test_grammar_extension.cpp
     test_progress_bar.cpp
     test_uuid.cpp
@@ -61,7 +62,8 @@ set(TEST_API_OBJECTS
     test_object_cache.cpp
     test_partial_executor.cpp
     test_buffer_pool_eviction.cpp
-    test_block_allocator_tls.cpp)
+    test_block_allocator_tls.cpp
+    test_group_commit_bound.cpp)
 
 if(NOT WIN32)
   set(TEST_API_OBJECTS ${TEST_API_OBJECTS} test_read_only.cpp)

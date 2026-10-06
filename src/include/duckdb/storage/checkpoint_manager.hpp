@@ -52,8 +52,8 @@ public:
 
 	~ActiveCheckpointWrapper();
 
-	//! Begin the transaction within the newly created connection.
-	void GetCheckpointTransaction(CheckpointOptions &options);
+	//! Registers the checkpoint (id, bound, active checkpoint), through a checkpoint transaction if there is a context
+	void Begin(CheckpointOptions &options);
 	void Commit();
 	bool HasCheckpointContext() const;
 	//! The context of the checkpoint connection, null when there is none (shutdown path)
@@ -65,6 +65,8 @@ private:
 	unique_ptr<Connection> checkpoint_connection;
 	optional_ptr<ClientContext> checkpoint_context;
 	optional_ptr<DuckTransaction> checkpoint_transaction;
+	//! Whether Begin registered an active checkpoint that Commit has not reset yet
+	bool active = false;
 };
 
 class CheckpointWriter {

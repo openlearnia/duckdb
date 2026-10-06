@@ -172,9 +172,11 @@ BoundStatement Binder::BindNode(UpdateQueryNode &node) {
 		throw BinderException("Can only update base table");
 	}
 	auto &table = *table_ptr;
-	if (!table.temporary && !AuthorizationProvider::ShouldSkipCatalog(table.ParentCatalog().GetName().GetIdentifierName())) {
+	if (!table.temporary &&
+	    !AuthorizationProvider::ShouldSkipCatalog(table.ParentCatalog().GetName().GetIdentifierName())) {
 		DBConfig::GetConfig(context).GetAuthorizationProvider().CheckModifyTable(
-		    context, table.ParentCatalog(), AUTH_UPDATE, table.ParentSchema().name.GetIdentifierName(), table.name.GetIdentifierName());
+		    context, table.ParentCatalog(), AUTH_UPDATE, table.ParentSchema().name.GetIdentifierName(),
+		    table.name.GetIdentifierName());
 	}
 	if (table.IsMaterializedView()) {
 		throw BinderException("Cannot update materialized view \"%s\"", table.name);

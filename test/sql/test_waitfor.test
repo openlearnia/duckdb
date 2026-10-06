@@ -1,6 +1,6 @@
 # name: test/sql/test_waitfor.test
 # description: the waitfor directive retries a query until it matches or its timeout elapses
-# group: [test_harness]
+# group: [sql]
 
 statement ok
 CREATE SEQUENCE waitfor_seq

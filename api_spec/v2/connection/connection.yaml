@@ -322,3 +322,47 @@ functions:
         indirection: 1
         description: "The progress snapshot to destroy."
     return_type: ERROR
+
+  connection_progress_get:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Captures a snapshot of the active query's execution progress.
+
+      Reads the percentage and row counts from one consistent snapshot
+      of the query currently executing on the connection. Safe to call
+      from any thread, including while another thread steps the query's
+      result.
+
+      Progress is published only when the enable_progress_bar option is
+      set; the bridge does not enable tracking itself. Both row counts
+      are 0 when no information is available. The percentage is -1 when
+      tracking is disabled, no query is active, or no progress has been
+      published yet.
+    role: getter
+    belongs_to: connection
+    parameters:
+      conn:
+        type: connection
+        description: "The connection handle."
+      out_percentage:
+        type: f64
+        indirection: 1
+        kind: OUT
+        description: "Receives the percentage complete in [0, 100], -1 if tracking is disabled, no query is active, or no progress has been published yet."
+      out_rows_processed:
+        type: u64
+        indirection: 1
+        kind: OUT
+        description: "Receives the number of rows processed so far."
+      out_total_rows_to_process:
+        type: u64
+        indirection: 1
+        kind: OUT
+        description: "Receives the total number of rows the query will process."
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
+    return_type: ERROR

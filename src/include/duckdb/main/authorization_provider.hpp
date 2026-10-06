@@ -43,8 +43,8 @@ public:
 	//! Called when a statement binds a table or view for reading. `catalog`
 	//! is the catalog the entry was resolved in. Providers should throw
 	//! (e.g. PermissionException) to deny access.
-	virtual void CheckReadObject(ClientContext &context, Catalog &catalog, bool is_view,
-	                             const string &schema_name, const string &object_name) = 0;
+	virtual void CheckReadObject(ClientContext &context, Catalog &catalog, bool is_view, const string &schema_name,
+	                             const string &object_name) = 0;
 
 	//! Called when a statement modifies a table (INSERT / UPDATE / DELETE /
 	//! MERGE). `privileges` is a bitmask of AuthorizationPrivilege.
@@ -54,7 +54,7 @@ public:
 	//! Called for catalog-object DDL (CREATE / DROP / ALTER of tables, views,
 	//! schemas, macros). For schemas, `object_name` is the schema name.
 	virtual void CheckModifySchema(ClientContext &context, Catalog &catalog, uint16_t privileges,
-	                              const string &schema_name, const string &object_name) = 0;
+	                               const string &schema_name, const string &object_name) = 0;
 
 	//! Called before ATTACH / DETACH / LOAD / INSTALL statements are executed.
 	virtual void CheckEngineManagement(ClientContext &context) = 0;
@@ -63,13 +63,14 @@ public:
 	//! execution identity accordingly.
 	virtual void CheckExecuteRoutine(ClientContext &context, Catalog &catalog, const string &schema_name,
 	                                 const string &routine_name, bool security_definer) = 0;
-	virtual bool RequireStatementRebind(ClientContext &context) { return false; }
+	virtual bool RequireStatementRebind(ClientContext &context) {
+		return false;
+	}
 	virtual void CheckReadFile(ClientContext &context, const string &function_name) = 0;
 	static bool IsFileReadingFunction(const string &function_name) {
 		return function_name == "read_csv" || function_name == "read_csv_auto" || function_name == "csv_scan" ||
-		       function_name == "read_parquet" || function_name == "parquet_scan" ||
-		       function_name == "read_json" || function_name == "read_json_auto" ||
-		       function_name == "json_scan" || function_name == "read_ndjson" ||
+		       function_name == "read_parquet" || function_name == "parquet_scan" || function_name == "read_json" ||
+		       function_name == "read_json_auto" || function_name == "json_scan" || function_name == "read_ndjson" ||
 		       function_name == "read_ndjson_auto" || function_name == "read_text" ||
 		       function_name == "read_text_auto" || function_name == "glob" || function_name == "glob_parquet";
 	}
@@ -77,8 +78,7 @@ public:
 	//! Internal catalogs that never route through the provider (system,
 	//! temp, and hidden DuckLake metadata databases).
 	static bool ShouldSkipCatalog(const string &catalog_name) {
-		return catalog_name == "system" || catalog_name == "temp" ||
-		       catalog_name.rfind("__ducklake_metadata_", 0) == 0;
+		return catalog_name == "system" || catalog_name == "temp" || catalog_name.rfind("__ducklake_metadata_", 0) == 0;
 	}
 };
 

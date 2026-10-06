@@ -173,3 +173,18 @@ DUCKDB_V2_ERROR duckdb_v2_query_progress_destroy(duckdb_v2_query_progress_handle
 		}
 	});
 }
+
+DUCKDB_V2_ERROR duckdb_v2_connection_progress_get(duckdb_v2_connection_handle conn, double *out_percentage,
+                                                  uint64_t *out_rows_processed, uint64_t *out_total_rows_to_process,
+                                                  duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(conn);
+	DUCKDB_CHECK_ARG(out_percentage);
+	DUCKDB_CHECK_ARG(out_rows_processed);
+	DUCKDB_CHECK_ARG(out_total_rows_to_process);
+	return WithErrorHandler(err, [&]() {
+		auto progress = Convert(conn)->context->GetQueryProgress();
+		*out_percentage = progress.GetPercentage();
+		*out_rows_processed = progress.GetRowsProcessed();
+		*out_total_rows_to_process = progress.GetTotalRowsToProcess();
+	});
+}

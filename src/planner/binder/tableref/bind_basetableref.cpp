@@ -311,7 +311,8 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		// the node is a view: get the query that the view represents
 		auto &view_catalog_entry = table_or_view->Cast<ViewCatalogEntry>();
 		// authorization: statement binds this view for reading
-		if (!AuthorizationProvider::ShouldSkipCatalog(view_catalog_entry.ParentCatalog().GetName().GetIdentifierName())) {
+		if (!AuthorizationProvider::ShouldSkipCatalog(
+		        view_catalog_entry.ParentCatalog().GetName().GetIdentifierName())) {
 			DBConfig::GetConfig(context).GetAuthorizationProvider().CheckReadObject(
 			    context, view_catalog_entry.ParentCatalog(), true,
 			    view_catalog_entry.ParentSchema().name.GetIdentifierName(),

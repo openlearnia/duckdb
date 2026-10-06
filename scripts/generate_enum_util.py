@@ -29,6 +29,7 @@ blacklist = [
     "FileWritePublicationState",
     "IdleFilter",
     "CreateDirectoryMode",
+    "MatchRecognizeScope",
     "RemoveDirectoryMode",
     "CopyOutputOwnership",
     "CopyOutputPublicationState",

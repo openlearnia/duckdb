@@ -24,10 +24,9 @@ BoundStatement Binder::Bind(CallStatement &stmt) {
 	if (procedure_entry) {
 		auto &procedure = procedure_entry->Cast<ProcedureCatalogEntry>();
 		if (!AuthorizationProvider::ShouldSkipCatalog(procedure.catalog.GetName().GetIdentifierName())) {
-			DBConfig::GetConfig(context)
-			    .GetAuthorizationProvider()
-			    .CheckExecuteRoutine(context, procedure.catalog, procedure.schema.name.GetIdentifierName(),
-			                         procedure.name.GetIdentifierName(), procedure.security_definer);
+			DBConfig::GetConfig(context).GetAuthorizationProvider().CheckExecuteRoutine(
+			    context, procedure.catalog, procedure.schema.name.GetIdentifierName(),
+			    procedure.name.GetIdentifierName(), procedure.security_definer);
 		}
 		auto &call_arguments = function.GetArguments();
 		if (call_arguments.size() != procedure.parameter_types.size()) {

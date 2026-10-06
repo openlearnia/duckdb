@@ -30,9 +30,11 @@ BoundStatement Binder::BindNode(DeleteQueryNode &node) {
 		throw BinderException("Can only delete from base table");
 	}
 	auto &table = *table_ptr;
-	if (!table.temporary && !AuthorizationProvider::ShouldSkipCatalog(table.ParentCatalog().GetName().GetIdentifierName())) {
+	if (!table.temporary &&
+	    !AuthorizationProvider::ShouldSkipCatalog(table.ParentCatalog().GetName().GetIdentifierName())) {
 		DBConfig::GetConfig(context).GetAuthorizationProvider().CheckModifyTable(
-		    context, table.ParentCatalog(), AUTH_DELETE, table.ParentSchema().name.GetIdentifierName(), table.name.GetIdentifierName());
+		    context, table.ParentCatalog(), AUTH_DELETE, table.ParentSchema().name.GetIdentifierName(),
+		    table.name.GetIdentifierName());
 	}
 	if (table.IsMaterializedView()) {
 		throw BinderException("Cannot delete from materialized view \"%s\"", table.name);

@@ -18,9 +18,13 @@ namespace duckdb {
 enum class VerifyExistenceType : uint8_t { APPEND = 0, APPEND_FK = 1, DELETE_FK = 2 };
 enum class ARTConflictType : uint8_t { NO_CONFLICT = 0, CONSTRAINT = 1 };
 
+//! Result of collecting row IDs; capacity exhaustion cannot be resumed.
+enum class ARTSearchResult : uint8_t { COMPLETED, CAPACITY_EXCEEDED };
+
 class ConflictManager;
 class ARTKey;
 class ARTKeySection;
+class RowIdVectorOutput;
 class FixedSizeAllocator;
 
 struct ARTIndexScanState;
@@ -63,7 +67,7 @@ public:
 	static IndexType GetARTIndexType();
 
 	//! Root of the tree.
-	NodePtr tree = NodePtr();
+	NodePtr root_ptr = NodePtr();
 	//! Fixed-size allocators holding the ART nodes.
 	shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> allocators;
 	//! True, if the ART owns its data.
@@ -74,10 +78,11 @@ public:
 public:
 	//! Try to initialize a scan on the ART with the given expression and filter.
 	unique_ptr<IndexScanState> TryInitializeScan(const Expression &expr, const Expression &filter_expr) const;
-	unique_ptr<IndexScanState> InitializeFullScan();
-	//! Perform a lookup on the ART, fetching up to max_count row IDs.
-	//! If all row IDs were fetched, it return true, else false.
-	bool Scan(IndexScanState &state, idx_t max_count, set<row_t> &row_ids) const DUCKDB_EXCLUDES(lock);
+	//! Initializes a scan for multiple equality lookup values.
+	unique_ptr<IndexScanState> InitializeBatchScan(unique_ptr<DataChunk> key_columns) const;
+	//! Scans the ART and appends matching row IDs to the output collection.
+	//! Returns true on completion, or false and clears the entire collection if its capacity is exceeded.
+	bool Scan(IndexScanState &state, RowIdVectorOutput &row_ids) const DUCKDB_EXCLUDES(lock);
 
 	//! Simple merge: scan source ART and delete each (key, rowid) from this ART.
 	// FIXME: replace with structural tree delete merge.
@@ -180,24 +185,26 @@ private:
 	//! The number of bytes fitting in the prefix.
 	uint8_t prefix_count;
 
-	bool FullScan(idx_t max_count, set<row_t> &row_ids) const;
-	bool SearchEqual(const ARTKey &key, idx_t max_count, set<row_t> &row_ids) const;
-	bool SearchGreater(const ARTKey &key, bool equal, idx_t max_count, set<row_t> &row_ids) const;
-	bool SearchLess(const ARTKey &upper_bound, bool equal, idx_t max_count, set<row_t> &row_ids) const;
-	bool SearchCloseRange(const ARTKey &lower_bound, const ARTKey &upper_bound, bool left_equal, bool right_equal,
-	                      idx_t max_count, set<row_t> &row_ids) const;
+	ARTSearchResult ScanInternal(IndexScanState &state, RowIdVectorOutput &row_ids) const;
+	ARTSearchResult ScanRange(ARTIndexScanState &scan_state, RowIdVectorOutput &row_ids) const;
+	ARTSearchResult ScanBatch(DataChunk &input, RowIdVectorOutput &row_ids) const;
+	ARTSearchResult SearchEqual(const ARTKey &key, RowIdVectorOutput &row_ids) const;
+	ARTSearchResult SearchGreater(const ARTKey &key, bool equal, RowIdVectorOutput &row_ids) const;
+	ARTSearchResult SearchLess(const ARTKey &upper_bound, bool equal, RowIdVectorOutput &row_ids) const;
+	ARTSearchResult SearchCloseRange(const ARTKey &lower_bound, const ARTKey &upper_bound, bool left_equal,
+	                                 bool right_equal, RowIdVectorOutput &row_ids) const;
 
 	string GenerateErrorKeyName(DataChunk &input, idx_t row) const;
 	string GenerateConstraintErrorMessage(VerifyExistenceType verify_type, const string &key_name) const;
-	void VerifyLeaf(const NodePtr &leaf, const ARTKey &key, DeleteIndexInfo delete_index_info, ConflictManager &manager,
-	                optional_idx &conflict_idx, idx_t i) const;
+	void VerifyLeaf(const NodePtr &leaf_ptr, const ARTKey &key, DeleteIndexInfo delete_index_info,
+	                ConflictManager &manager, optional_idx &conflict_idx, idx_t i) const;
 	void VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictManager &manager) override
 	    DUCKDB_EXCLUDES(lock);
 	string GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,
 	                                     DataChunk &input) const override DUCKDB_EXCLUDES(lock);
 
 	void InitializeMergeUpperBounds(unsafe_vector<idx_t> &upper_bounds);
-	void InitializeMerge(NodePtr &other_tree, unsafe_vector<idx_t> &upper_bounds);
+	void InitializeMerge(NodePtr &other_root_ptr, unsafe_vector<idx_t> &upper_bounds);
 
 	void InitializeVacuum(unordered_set<uint8_t> &indexes);
 	void FinalizeVacuum(const unordered_set<uint8_t> &indexes);

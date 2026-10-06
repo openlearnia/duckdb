@@ -214,7 +214,8 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 	if (ref.function && ref.function->GetExpressionType() == ExpressionType::FUNCTION) {
 		auto &bound_fn = ref.function->Cast<FunctionExpression>();
 		if (AuthorizationProvider::IsFileReadingFunction(bound_fn.FunctionName().GetIdentifierName())) {
-			DBConfig::GetConfig(context).GetAuthorizationProvider().CheckReadFile(context, bound_fn.FunctionName().GetIdentifierName());
+			DBConfig::GetConfig(context).GetAuthorizationProvider().CheckReadFile(
+			    context, bound_fn.FunctionName().GetIdentifierName());
 		}
 	}
 	// perform the binding

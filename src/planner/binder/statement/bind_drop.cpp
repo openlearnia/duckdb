@@ -105,7 +105,8 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 		}
 		if (catalog && !AuthorizationProvider::ShouldSkipCatalog(catalog->GetName().GetIdentifierName())) {
 			DBConfig::GetConfig(context).GetAuthorizationProvider().CheckModifySchema(
-			    context, *catalog, AUTH_DROP, entry->ParentSchema().name.GetIdentifierName(), entry->name.GetIdentifierName());
+			    context, *catalog, AUTH_DROP, entry->ParentSchema().name.GetIdentifierName(),
+			    entry->name.GetIdentifierName());
 		}
 		if (stmt.info->type == CatalogType::TABLE_ENTRY) {
 			auto &table = entry->Cast<TableCatalogEntry>();

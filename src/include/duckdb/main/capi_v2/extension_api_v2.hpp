@@ -79,6 +79,9 @@ typedef struct {
 	(duckdb_v2_connection_handle conn, idx_t *out_count, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_connection_interrupt)
 	(duckdb_v2_connection_handle conn, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_connection_progress_get)
+	(duckdb_v2_connection_handle conn, double *out_percentage, uint64_t *out_rows_processed,
+	 uint64_t *out_total_rows_to_process, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_connection_query_progress)
 	(duckdb_v2_connection_handle conn, duckdb_v2_query_progress_handle *out_progress, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_connection_set_option)
@@ -1361,6 +1364,7 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_connection_get_option_by_name = duckdb_v2_connection_get_option_by_name;
 	result.duckdb_v2_connection_get_option_count = duckdb_v2_connection_get_option_count;
 	result.duckdb_v2_connection_interrupt = duckdb_v2_connection_interrupt;
+	result.duckdb_v2_connection_progress_get = duckdb_v2_connection_progress_get;
 	result.duckdb_v2_connection_query_progress = duckdb_v2_connection_query_progress;
 	result.duckdb_v2_connection_set_option = duckdb_v2_connection_set_option;
 	result.duckdb_v2_context_create_type_from_id = duckdb_v2_context_create_type_from_id;

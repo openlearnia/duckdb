@@ -867,8 +867,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		const auto &catalog_name = qualified_name.Catalog();
 		const auto &schema_name = qualified_name.Schema();
 		auto bound_catalog = Catalog::GetCatalogEntry(context, catalog_name);
-		if (bound_catalog &&
-		    !AuthorizationProvider::ShouldSkipCatalog(bound_catalog->GetName().GetIdentifierName())) {
+		if (bound_catalog && !AuthorizationProvider::ShouldSkipCatalog(bound_catalog->GetName().GetIdentifierName())) {
 			const string schema_arg = schema_name.empty() ? string("main") : schema_name.GetIdentifierName();
 			const string object_arg =
 			    stmt.info->type == CatalogType::SCHEMA_ENTRY ? schema_name.GetIdentifierName() : string();

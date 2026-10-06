@@ -756,8 +756,8 @@ static JSValue JsCallTransaction(JSContext *js_context, JSValueConst this_val, i
 	// PostgreSQL forbids transaction control inside a SECURITY DEFINER routine, because the
 	// body runs with the creator's privileges and could commit work the caller never saw.
 	if (api->security_definer) {
-		return JS_ThrowInternalError(
-		    js_context, "duckdb.transaction cannot be used inside a SECURITY DEFINER procedure");
+		return JS_ThrowInternalError(js_context,
+		                             "duckdb.transaction cannot be used inside a SECURITY DEFINER procedure");
 	}
 
 	JSValue resolving_funcs[2];
