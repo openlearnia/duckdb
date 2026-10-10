@@ -1,3 +1,6 @@
+#include <cerrno>
+#include <cstdlib>
+
 #include "duckdb/execution/operator/helper/physical_call_procedure.hpp"
 
 #include "duckdb/common/string_util.hpp"
@@ -60,6 +63,13 @@ struct ProcedureNestingGuard {
 };
 
 struct ProcedureSqlOperation {
+	enum class Type {
+		SQL,
+		//! transaction BEGIN - executed in queue order so it cannot overtake previously
+		//! queued statements (a synchronous BEGIN would swallow them into the transaction)
+		BEGIN,
+	};
+	Type type = Type::SQL;
 	string sql;
 	vector<Value> bind_values;
 	int magic = 0;
@@ -239,6 +249,8 @@ static string GetJSValueErrorMessage(JSContext *js_context, JSValueConst excepti
 	return result;
 }
 
+static bool JsToBindValue(JSContext *js_context, JSValueConst js_value, Value &result, string &error);
+
 static Value FromJSValue(JSContext *js_context, JSValueConst value, ClientContext &context,
                          const LogicalType &return_type) {
 	if (JS_IsNull(value) || JS_IsUndefined(value)) {
@@ -253,6 +265,17 @@ static Value FromJSValue(JSContext *js_context, JSValueConst value, ClientContex
 		return Value::BOOLEAN(result != 0);
 	}
 	if (return_type.IsNumeric()) {
+		if (JS_IsBigInt(value)) {
+			// bigints lose precision through float64: route them through the exact
+			// string-based bigint binding instead
+			Value bigint_value;
+			string error;
+			if (!JsToBindValue(js_context, value, bigint_value, error)) {
+				throw InvalidInputException("JavaScript procedure returned a value that cannot be cast to %s: %s",
+				                            return_type.ToString(), error);
+			}
+			return bigint_value.CastAs(context, return_type);
+		}
 		double result;
 		if (JS_ToFloat64(js_context, &result, value) < 0) {
 			throw InvalidInputException("JavaScript procedure returned a value that cannot be cast to %s: %s",
@@ -295,13 +318,33 @@ static bool JsToBindValue(JSContext *js_context, JSValueConst js_value, Value &r
 		return true;
 	}
 	if (JS_IsBigInt(js_value)) {
-		uint64_t big_result;
-		if (JS_ToBigUint64(js_context, &big_result, js_value) < 0) {
+		// JS_ToBigUint64 silently wraps negative and out-of-range values (JavaScript -1n
+		// becomes 18446744073709551615, 2^64n becomes 0). Stringify the bigint instead -
+		// the decimal representation is exact - and parse it losslessly.
+		auto chars = JS_ToCString(js_context, js_value);
+		if (!chars) {
 			error = GetJSError(js_context);
 			return false;
 		}
-		result = Value::UBIGINT(big_result);
-		return true;
+		string text(chars);
+		JS_FreeCString(js_context, chars);
+		StringUtil::Trim(text);
+		errno = 0;
+		char *end = nullptr;
+		auto signed_value = std::strtoll(text.c_str(), &end, 10);
+		if (errno == 0 && end && *end == '\0' && !text.empty()) {
+			result = Value::BIGINT(signed_value);
+			return true;
+		}
+		errno = 0;
+		end = nullptr;
+		auto unsigned_value = std::strtoull(text.c_str(), &end, 10);
+		if (errno == 0 && end && *end == '\0' && !text.empty() && text.find('-') == string::npos) {
+			result = Value::UBIGINT(unsigned_value);
+			return true;
+		}
+		error = "bigint parameter " + text + " does not fit in BIGINT or UBIGINT";
+		return false;
 	}
 	if (JS_IsString(js_value)) {
 		size_t length = 0;
@@ -399,10 +442,17 @@ void ProcedureSqlApi::WorkerLoop() {
 		auto previous_depth = javascript_procedure_depth;
 		javascript_procedure_depth = nesting_depth;
 		try {
-			completion.result = ExecuteOperation(*operation);
-			if (!completion.result) {
+			if (operation->type == ProcedureSqlOperation::Type::BEGIN) {
+				connection.BeginTransaction();
+				// internal marker operation: no SQL result, no Promise to settle
+				completion.result = nullptr;
+				completion.error = string();
+			} else {
+				completion.result = ExecuteOperation(*operation);
+			}
+			if (!completion.result && operation->type != ProcedureSqlOperation::Type::BEGIN) {
 				completion.error = "query did not produce a result";
-			} else if (completion.result->HasError()) {
+			} else if (completion.result && completion.result->HasError()) {
 				completion.error = completion.result->GetError();
 			}
 		} catch (const std::exception &ex) {
@@ -775,7 +825,16 @@ static JSValue JsCallTransaction(JSContext *js_context, JSValueConst this_val, i
 	api->transaction_callback_rejection = JS_UNDEFINED;
 
 	try {
-		api->connection.BeginTransaction();
+		// The BEGIN must run in queue order: executing it here would let it overtake SQL
+		// that is still pending on the worker, capturing that work into the transaction.
+		// Queue it as a marker operation and start the callback immediately - the
+		// callback's own SQL lands behind the BEGIN, and the commit/rollback paths only
+		// run once every outstanding operation (including this BEGIN) has completed.
+		auto begin_operation = make_shared_ptr<ProcedureSqlOperation>();
+		begin_operation->type = ProcedureSqlOperation::Type::BEGIN;
+		if (!api->EnqueueOperation(std::move(begin_operation))) {
+			throw InvalidInputException("procedure SQL session is closing");
+		}
 		api->transaction_active = true;
 		api->transaction_rollback_only = false;
 		api->transaction_error.clear();
@@ -925,6 +984,15 @@ static JSValue JsCallSqlApi(JSContext *js_context, JSValueConst this_val, int ar
 //! transaction rollback bookkeeping intentionally happen here rather than in WorkerLoop.
 static string SettleSqlCompletion(JSContext *js_context, ProcedureSqlApi &api, ProcedureSqlCompletion &completion) {
 	auto &operation = *completion.operation;
+	if (operation.type == ProcedureSqlOperation::Type::BEGIN) {
+		if (!completion.error.empty()) {
+			// the transaction never opened: ensure the transaction resolves as failed
+			MarkProcedureTransactionRollbackOnly(api, completion.error);
+		}
+		// internal transaction marker: nothing to settle, but it still occupies a queue slot
+		CompleteOperationCount(api);
+		return string();
+	}
 	string error = completion.error;
 	JSValue value = JS_UNDEFINED;
 	if (error.empty() && (!completion.result || completion.result->HasError())) {
@@ -1006,7 +1074,16 @@ static JSValue RunProcedurePromiseLoop(JSContext *js_context, ProcedureSqlApi &a
                                        bool &rejected) {
 	auto runtime = JS_GetRuntime(js_context);
 	bool root_rejection_handled = false;
+	bool interrupted = false;
 	for (;;) {
+		if (api.client.IsInterruptedOrExpired()) {
+			if (!interrupted) {
+				// the caller hit its limits (max_execution_time, KILL QUERY): interrupt the
+				// in-flight SQL on the private connection too, then stop driving the loop
+				interrupted = true;
+				api.connection.context->Interrupt();
+			}
+		}
 		auto completion_error = DrainAndSettleSqlCompletions(js_context, api);
 		if (!completion_error.empty()) {
 			api.RequestClose();
@@ -1059,6 +1136,13 @@ static JSValue RunProcedurePromiseLoop(JSContext *js_context, ProcedureSqlApi &a
 			api.RequestClose();
 		}
 
+		if (interrupted && !api.HasOutstandingOperations()) {
+			// interruption reached the caller: stop waiting for JavaScript that may never
+			// settle (infinite loops were already broken by the interrupt handler)
+			api.RequestClose();
+			rejected = true;
+			throw InvalidInputException("JavaScript procedure interrupted: execution time limit or cancel");
+		}
 		if (root_state != JS_PROMISE_PENDING && !api.HasOutstandingOperations() &&
 		    !IsProcedureTransactionPending(api)) {
 			rejected = root_state == JS_PROMISE_REJECTED;
@@ -1070,6 +1154,14 @@ static JSValue RunProcedurePromiseLoop(JSContext *js_context, ProcedureSqlApi &a
 			api.WaitForActivity();
 		}
 	}
+}
+
+//! QuickJS consults this handler at interpreter back-edges. Returning non-zero makes the
+//! running JavaScript throw, so caller-side interruption (max_execution_time, KILL QUERY)
+//! reaches infinite loops instead of only the SQL statements.
+static int ProcedureInterruptHandler(JSRuntime *rt, void *opaque) {
+	auto *client = static_cast<ClientContext *>(opaque);
+	return client->IsInterruptedOrExpired() ? 1 : 0;
 }
 
 //! Installs the `duckdb` global: { execute(sql[, params]), query(sql[, params]), transaction(callback) }.
@@ -1131,6 +1223,7 @@ SourceResultType PhysicalCallProcedure::GetDataInternal(ExecutionContext &contex
 	}
 	JS_SetMemoryLimit(runtime, 64ULL * 1024 * 1024);
 	JS_SetMaxStackSize(runtime, 8ULL * 1024 * 1024);
+	JS_SetInterruptHandler(runtime, ProcedureInterruptHandler, &context.client);
 	JS_SetRuntimeOpaque(runtime, &sql_api);
 	auto js_context = JS_NewContext(runtime);
 	if (!js_context) {

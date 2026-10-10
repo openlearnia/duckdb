@@ -4,6 +4,7 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
@@ -81,6 +82,29 @@ static bool IsAppendOnlySinceRefresh(ClientContext &context, TableCatalogEntry &
 	}
 	row_watermark = current_physical_rows - newly_appended_rows;
 	return true;
+}
+
+//! True when the expression contains a function that resolves to an aggregate function entry
+//! (AVG, DISTINCT aggregates, string_agg, ...). Such expressions collapse rows: appending new
+//! rows or re-deriving per-row values for them produces wrong results, so views containing
+//! them must fall back to a full refresh.
+static bool ContainsAggregateExpression(ClientContext &context, const ParsedExpression &expression) {
+	if (expression.GetExpressionClass() == ExpressionClass::FUNCTION) {
+		auto &function = expression.Cast<const FunctionExpression>();
+		EntryLookupInfo fn_entry(CatalogType::AGGREGATE_FUNCTION_ENTRY, function.GetQualifiedName());
+		auto entry = Catalog::GetEntry(context, fn_entry, OnEntryNotFound::RETURN_NULL);
+		if (entry && entry->type == CatalogType::AGGREGATE_FUNCTION_ENTRY) {
+			return true;
+		}
+	}
+	bool found = false;
+	ParsedExpressionIterator::EnumerateChildren(
+	    expression, [&](const ParsedExpression &child) {
+		    if (!found && ContainsAggregateExpression(context, child)) {
+			    found = true;
+		    }
+	    });
+	return found;
 }
 
 static bool AnalyzeAggregate(const ParsedExpression &expression, idx_t select_index, NativeMVAggregateInfo &result) {
@@ -233,6 +257,11 @@ bool TryBuildMaterializedViewIncrementalQuery(ClientContext &context, TableCatal
 				is_key = true;
 				break;
 			}
+		}
+		if (!is_key && ContainsAggregateExpression(context, *node.select_list[select_idx])) {
+			// a non-mergeable aggregate (AVG, DISTINCT aggregates, nested aggregates, ...):
+			// appending rows or evaluating it per appended row is wrong - full refresh instead
+			return false;
 		}
 		if (!is_key && !groups.empty()) {
 			return false;

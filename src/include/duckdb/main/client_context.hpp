@@ -134,6 +134,9 @@ public:
 	//! Interrupts the running query. Async-signal-safe: sets a flag and nothing else
 	DUCKDB_API void Interrupt();
 	DUCKDB_API bool IsInterrupted() const;
+	//! Non-throwing variant for embedder polling loops (e.g. script VM interrupt handlers):
+	//! true when the connection was interrupted or the query deadline (max_execution_time) passed.
+	DUCKDB_API bool IsInterruptedOrExpired() const;
 	DUCKDB_API void ClearInterrupt();
 	//! Suppress all further interrupts for the current query (called after irreversible operations like COMMIT)
 	DUCKDB_API void SuppressInterrupts();

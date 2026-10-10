@@ -1361,6 +1361,19 @@ bool ClientContext::IsInterrupted() const {
 	return interrupt_state.load(std::memory_order_relaxed) == ClientInterruptState::INTERRUPTED;
 }
 
+bool ClientContext::IsInterruptedOrExpired() const {
+	if (IsInterrupted()) {
+		return true;
+	}
+	if (query_deadline.IsValid()) {
+		auto now = NumericCast<idx_t>(duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count());
+		if (now >= query_deadline.GetIndex()) {
+			return true;
+		}
+	}
+	return false;
+}
+
 void ClientContext::ClearInterrupt() {
 	interrupt_state = ClientInterruptState::NOT_INTERRUPTED;
 }
