@@ -96,9 +96,7 @@ static void DuckDBMaterializedViewsFunction(ClientContext &context, TableFunctio
 				auto &storage = dependency->Cast<TableCatalogEntry>().GetStorage();
 				auto generation = storage.GetModificationGeneration();
 				auto &transaction = DuckTransaction::Get(context, dependency->ParentCatalog());
-				if (transaction.HasModifiedTable(storage)) {
-					generation++;
-				}
+				generation += transaction.GetTableMutationCount(storage);
 				current_dependency_generations.push_back(Value::BIGINT(NumericCast<int64_t>(generation)));
 			}
 		}

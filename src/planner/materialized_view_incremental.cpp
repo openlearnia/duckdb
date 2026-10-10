@@ -10,6 +10,7 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/local_storage.hpp"
@@ -59,16 +60,9 @@ static bool IsAppendOnlySinceRefresh(ClientContext &context, TableCatalogEntry &
 	auto delete_generation = storage.GetDeleteGeneration();
 	auto update_generation = storage.GetUpdateGeneration();
 	auto &transaction = DuckTransaction::Get(context, dependency->ParentCatalog());
-	auto modification_type = transaction.GetTableModificationType(storage);
-	if (modification_type & static_cast<uint8_t>(TableModificationType::APPEND)) {
-		append_generation++;
-	}
-	if (modification_type & static_cast<uint8_t>(TableModificationType::DELETE)) {
-		delete_generation++;
-	}
-	if (modification_type & static_cast<uint8_t>(TableModificationType::UPDATE)) {
-		update_generation++;
-	}
+	append_generation += transaction.GetTableMutationCount(storage, TableModificationType::APPEND);
+	delete_generation += transaction.GetTableMutationCount(storage, TableModificationType::DELETE);
+	update_generation += transaction.GetTableMutationCount(storage, TableModificationType::UPDATE);
 	auto local_appends = transaction.GetLocalStorage().AddedRows(storage);
 	auto current_appended_rows = storage.GetAppendedRows() + local_appends;
 	auto current_physical_rows = storage.GetTotalRows() + local_appends;
@@ -98,12 +92,11 @@ static bool ContainsAggregateExpression(ClientContext &context, const ParsedExpr
 		}
 	}
 	bool found = false;
-	ParsedExpressionIterator::EnumerateChildren(
-	    expression, [&](const ParsedExpression &child) {
-		    if (!found && ContainsAggregateExpression(context, child)) {
-			    found = true;
-		    }
-	    });
+	ParsedExpressionIterator::EnumerateChildren(expression, [&](const ParsedExpression &child) {
+		if (!found && ContainsAggregateExpression(context, child)) {
+			found = true;
+		}
+	});
 	return found;
 }
 
@@ -205,6 +198,12 @@ vector<idx_t> GetMaterializedViewLogicalDiffKeyPositions(const string &original_
 
 bool TryBuildMaterializedViewIncrementalQuery(ClientContext &context, TableCatalogEntry &view,
                                               unique_ptr<SelectStatement> &query, string &refresh_mode) {
+	// Incremental refresh reads the stale backing view. Under the error policy,
+	// use the original definition instead so refresh can repair it without
+	// relaxing protection for any stale views referenced by that definition.
+	if (MaterializedViewStaleReadSetting::GetSetting(context).GetValue<string>() == "error") {
+		return false;
+	}
 	TableCatalogEntry *dependency = nullptr;
 	idx_t row_watermark;
 	if (!IsAppendOnlySinceRefresh(context, view, dependency, row_watermark)) {

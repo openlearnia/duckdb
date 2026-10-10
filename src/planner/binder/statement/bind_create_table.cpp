@@ -108,23 +108,22 @@ static void CaptureMaterializedViewDependencies(ClientContext &context, LogicalO
 			if (!already_captured) {
 				base.dependencies.AddDependency(*table);
 				auto &storage = table->GetStorage();
-				auto generation = storage.GetModificationGeneration();
 				auto append_generation = storage.GetAppendGeneration();
 				auto delete_generation = storage.GetDeleteGeneration();
 				auto update_generation = storage.GetUpdateGeneration();
 				auto &transaction = DuckTransaction::Get(context, table->ParentCatalog());
-				auto modification_type = transaction.GetTableModificationType(storage);
-				if (modification_type != 0) {
-					generation++;
-				}
-				if (modification_type & static_cast<uint8_t>(TableModificationType::APPEND)) {
-					append_generation++;
-				}
-				if (modification_type & static_cast<uint8_t>(TableModificationType::DELETE)) {
-					delete_generation++;
-				}
-				if (modification_type & static_cast<uint8_t>(TableModificationType::UPDATE)) {
-					update_generation++;
+				auto visible_generation = storage.GetVisibleModificationGeneration(transaction.GetSnapshotView());
+				auto generation = visible_generation.IsValid()
+				                      ? visible_generation.GetIndex() + transaction.GetTableMutationCount(storage)
+				                      : 0;
+				append_generation += transaction.GetTableMutationCount(storage, TableModificationType::APPEND);
+				delete_generation += transaction.GetTableMutationCount(storage, TableModificationType::DELETE);
+				update_generation += transaction.GetTableMutationCount(storage, TableModificationType::UPDATE);
+				if (!visible_generation.IsValid()) {
+					// A newer commit is outside this snapshot; the next refresh must be full.
+					append_generation = DConstants::INVALID_INDEX;
+					delete_generation = DConstants::INVALID_INDEX;
+					update_generation = DConstants::INVALID_INDEX;
 				}
 				base.materialized_view_dependency_catalogs.push_back(
 				    table->ParentCatalog().GetName().GetIdentifierName());

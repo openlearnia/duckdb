@@ -6,6 +6,7 @@
 
 #include "parquet_crypto.hpp"
 #include "parquet_decimal_utils.hpp"
+#include "parquet_int128.hpp"
 #include "parquet_shredding.hpp"
 #include "resizable_buffer.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
@@ -134,7 +135,7 @@ bool ParquetWriter::TryGetParquetType(const LogicalType &duckdb_type, optional_p
 		break;
 	case LogicalTypeId::UHUGEINT:
 	case LogicalTypeId::HUGEINT:
-		parquet_type = Type::DOUBLE;
+		parquet_type = Type::FIXED_LEN_BYTE_ARRAY;
 		break;
 	case LogicalTypeId::ENUM:
 	case LogicalTypeId::BLOB:
@@ -333,6 +334,11 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type, duckdb_p
 		schema_ele.__isset.type_length = true;
 		schema_ele.__isset.logicalType = true;
 		schema_ele.logicalType.__isset.UUID = true;
+		break;
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UHUGEINT:
+		schema_ele.type_length = 16;
+		schema_ele.__isset.type_length = true;
 		break;
 	case LogicalTypeId::DECIMAL:
 		schema_ele.converted_type = ConvertedType::DECIMAL;
@@ -533,6 +539,9 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, ParquetWrit
 	    StringUtil::Format("DuckDB version %s (build %s)", DuckDB::LibraryVersion(), DuckDB::SourceID());
 
 	for (auto &kv_pair : kv_metadata) {
+		if (StringUtil::StartsWith(kv_pair.first, "duckdb.int128.")) {
+			throw InvalidInputException("Parquet metadata keys starting with duckdb.int128. are reserved");
+		}
 		duckdb_parquet::KeyValue kv;
 		kv.__set_key(kv_pair.first);
 		kv.__set_value(kv_pair.second);
@@ -1126,6 +1135,7 @@ static unique_ptr<ColumnStatsUnifier> GetBaseStatsUnifier(const LogicalType &typ
 		return make_uniq<NumericStatsUnifier<float>>();
 	case LogicalTypeId::HUGEINT:
 	case LogicalTypeId::UHUGEINT:
+		return make_uniq<NullStatsUnifier>();
 	case LogicalTypeId::DOUBLE:
 		return make_uniq<NumericStatsUnifier<double>>();
 	case LogicalTypeId::DECIMAL: {
@@ -1319,6 +1329,20 @@ void ParquetWriter::InitializeSchemaElements() {
 	InitializeColumnOrders(unique_columns);
 }
 
+static void AddInt128Metadata(const ColumnWriter &writer, FileMetaData &metadata) {
+	auto type = writer.Type().id();
+	if (type == LogicalTypeId::HUGEINT || type == LogicalTypeId::UHUGEINT) {
+		duckdb_parquet::KeyValue kv;
+		kv.__set_key(ParquetInt128::MetadataKey(writer.SchemaIndex()));
+		kv.__set_value(type == LogicalTypeId::HUGEINT ? "HUGEINT" : "UHUGEINT");
+		metadata.key_value_metadata.push_back(std::move(kv));
+		metadata.__isset.key_value_metadata = true;
+	}
+	for (auto &child : writer.ChildWriters()) {
+		AddInt128Metadata(*child, metadata);
+	}
+}
+
 idx_t ParquetWriter::InitializeColumnWriterSchemaIndices() {
 	// populate root schema object
 	file_meta_data.schema.resize(1);
@@ -1331,6 +1355,7 @@ idx_t ParquetWriter::InitializeColumnWriterSchemaIndices() {
 	idx_t unique_columns = 0;
 	for (auto &column_writer : column_writers) {
 		unique_columns += column_writer->FinalizeSchema(file_meta_data.schema);
+		AddInt128Metadata(*column_writer, file_meta_data);
 	}
 	return unique_columns;
 }

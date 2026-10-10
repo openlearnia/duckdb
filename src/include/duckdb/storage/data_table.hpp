@@ -40,6 +40,7 @@ class Vector;
 class Transaction;
 class WriteAheadLog;
 class TableDataWriter;
+struct TableMutationCounts;
 class ConflictManager;
 class TableScanState;
 struct TableDeleteState;
@@ -186,8 +187,10 @@ public:
 	void FinalizeAppend(DuckTransaction &transaction, TableAppendState &state);
 	//! Commit the append
 	void CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count);
-	void CommitModification(uint8_t modification_type = 7);
+	void CommitModification(const TableMutationCounts &mutation_counts, transaction_t commit_id);
 	idx_t GetModificationGeneration() const;
+	optional_idx GetVisibleModificationGeneration(const SnapshotView &view) const;
+	transaction_t GetLastModificationCommitId() const;
 	idx_t GetAppendGeneration() const;
 	idx_t GetDeleteGeneration() const;
 	idx_t GetUpdateGeneration() const;
@@ -341,6 +344,8 @@ private:
 	//! The version of the data table
 	atomic<DataTableVersion> version;
 	atomic<idx_t> modification_generation;
+	mutable mutex modification_lock;
+	transaction_t last_modification_commit_id = 0;
 	atomic<idx_t> append_generation;
 	atomic<idx_t> delete_generation;
 	atomic<idx_t> update_generation;

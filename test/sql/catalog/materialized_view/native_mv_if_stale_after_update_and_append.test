@@ -1,0 +1,44 @@
+# name: test/sql/catalog/materialized_view/native_mv_if_stale_after_update_and_append.test
+# description: An update after refresh prevents an append-only incremental refresh in the same transaction
+# group: [materialized_view]
+
+statement ok
+CREATE TABLE source(v INTEGER)
+
+statement ok
+INSERT INTO source VALUES (10)
+
+statement ok
+CREATE MATERIALIZED VIEW mv AS SELECT v FROM source
+
+statement ok
+BEGIN
+
+statement ok
+UPDATE source SET v=11
+
+statement ok
+REFRESH MATERIALIZED VIEW mv
+
+statement ok
+UPDATE source SET v=30
+
+statement ok
+INSERT INTO source VALUES (40)
+
+statement ok
+REFRESH MATERIALIZED VIEW IF STALE mv
+
+query I rowsort
+SELECT * FROM mv
+----
+30
+40
+
+statement ok
+COMMIT
+
+query I
+SELECT CAST(is_stale AS INTEGER) FROM duckdb_materialized_views() WHERE view_name='mv'
+----
+0

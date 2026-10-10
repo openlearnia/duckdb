@@ -13,6 +13,7 @@
 #include "reader/byte_array_length_column_reader.hpp"
 #include "reader/expression_column_reader.hpp"
 #include "parquet_geometry.hpp"
+#include "parquet_int128.hpp"
 #include "reader/list_column_reader.hpp"
 #include "parquet_crypto.hpp"
 #include "parquet_file_metadata_cache.hpp"
@@ -386,6 +387,39 @@ static bool CanUseParquetMetadataStatistics(ClientContext &context,
 }
 
 LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, ParquetColumnSchema &schema) const {
+	auto metadata = GetFileMetadata();
+	optional_idx schema_index = schema.schema_index;
+	if (!schema_index.IsValid()) {
+		for (idx_t i = 0; i < metadata->schema.size(); i++) {
+			if (&metadata->schema[i] == &s_ele) {
+				schema_index = i;
+				break;
+			}
+		}
+	}
+	if (schema_index.IsValid()) {
+		auto key = ParquetInt128::MetadataKey(schema_index.GetIndex());
+		optional_ptr<const duckdb_parquet::KeyValue> marker;
+		for (auto &kv : metadata->key_value_metadata) {
+			if (kv.key != key) {
+				continue;
+			}
+			if (marker) {
+				throw IOException("Duplicate Parquet 128-bit integer metadata for column %s", s_ele.name);
+			}
+			marker = &kv;
+		}
+		if (marker) {
+			if (!s_ele.__isset.type || s_ele.type != Type::FIXED_LEN_BYTE_ARRAY || !s_ele.__isset.type_length ||
+			    s_ele.type_length != 16 || s_ele.__isset.logicalType || s_ele.__isset.converted_type ||
+			    !marker->__isset.value || (marker->value != "HUGEINT" && marker->value != "UHUGEINT")) {
+				throw IOException("Invalid Parquet 128-bit integer metadata for column %s", s_ele.name);
+			}
+			schema.type_length = 16;
+			schema.parquet_type = Type::FIXED_LEN_BYTE_ARRAY;
+			return marker->value == "HUGEINT" ? LogicalType::HUGEINT : LogicalType::UHUGEINT;
+		}
+	}
 	return DeriveLogicalType(s_ele, parquet_options, schema);
 }
 
@@ -613,8 +647,10 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, const P
 ParquetColumnSchema ParquetReader::ParseColumnSchema(const SchemaElement &s_ele, idx_t max_define, idx_t max_repeat,
                                                      idx_t schema_index, idx_t column_index,
                                                      ParquetColumnSchemaType type) {
-	return ParquetColumnSchema::FromSchemaElement(s_ele, max_define, max_repeat, schema_index, column_index, type,
-	                                              parquet_options);
+	auto result = ParquetColumnSchema::FromSchemaElement(s_ele, max_define, max_repeat, schema_index, column_index,
+	                                                     type, parquet_options);
+	result.type = DeriveLogicalType(s_ele, result);
+	return result;
 }
 
 static unique_ptr<BaseStatistics> ReadColumnStatistics(const FileMetaData &file_meta_data,

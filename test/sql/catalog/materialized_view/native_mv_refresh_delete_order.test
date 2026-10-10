@@ -1,0 +1,50 @@
+# name: test/sql/catalog/materialized_view/native_mv_refresh_delete_order.test
+# description: Deletes after refresh remain stale across commit even after an earlier delete
+# group: [materialized_view]
+
+statement ok
+CREATE TABLE source(v INTEGER)
+
+statement ok
+INSERT INTO source VALUES (10), (20)
+
+statement ok
+CREATE MATERIALIZED VIEW mv AS SELECT v FROM source
+
+statement ok
+BEGIN
+
+statement ok
+DELETE FROM source WHERE v=10
+
+statement ok
+REFRESH MATERIALIZED VIEW mv
+
+statement ok
+DELETE FROM source WHERE v=20
+
+query I
+SELECT CAST(is_stale AS INTEGER) FROM duckdb_materialized_views() WHERE view_name='mv'
+----
+1
+
+statement ok
+COMMIT
+
+query I
+SELECT CAST(is_stale AS INTEGER) FROM duckdb_materialized_views() WHERE view_name='mv'
+----
+1
+
+statement ok
+REFRESH MATERIALIZED VIEW IF STALE mv
+
+query I
+SELECT count(*) FROM mv
+----
+0
+
+query I
+SELECT CAST(is_stale AS INTEGER) FROM duckdb_materialized_views() WHERE view_name='mv'
+----
+0

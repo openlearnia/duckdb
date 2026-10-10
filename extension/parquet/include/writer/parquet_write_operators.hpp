@@ -10,6 +10,7 @@
 
 #include "writer/parquet_write_stats.hpp"
 #include "parquet_interval.hpp"
+#include "parquet_int128.hpp"
 #include "parquet_timestamp.hpp"
 #include "zstd/common/xxhash.hpp"
 #include "duckdb/common/types/time.hpp"
@@ -358,10 +359,10 @@ struct ParquetTimeTZOperator : public BaseParquetOperator {
 	}
 };
 
-struct ParquetHugeintOperator : public BaseParquetOperator {
+struct ParquetInt128Operator : public BaseParquetOperator {
 	template <class SRC, class TGT>
 	static TGT Operation(SRC input) {
-		return Hugeint::Cast<double>(input);
+		return ParquetInt128::Encode(input);
 	}
 
 	template <class SRC, class TGT>
@@ -372,21 +373,15 @@ struct ParquetHugeintOperator : public BaseParquetOperator {
 	template <class SRC, class TGT>
 	static void HandleStats(ColumnWriterStatistics *stats, TGT target_value) {
 	}
-};
 
-struct ParquetUhugeintOperator : public BaseParquetOperator {
 	template <class SRC, class TGT>
-	static TGT Operation(SRC input) {
-		return Uhugeint::Cast<double>(input);
+	static uint64_t XXHash64(const TGT &target_value) {
+		return duckdb_zstd::XXH64(target_value.bytes, 16, 0);
 	}
 
 	template <class SRC, class TGT>
-	static unique_ptr<ColumnWriterStatistics> InitializeStats() {
-		return make_uniq<ColumnWriterStatistics>();
-	}
-
-	template <class SRC, class TGT>
-	static void HandleStats(ColumnWriterStatistics *stats, TGT target_value) {
+	static void WriteToStream(const TGT &target_value, WriteStream &ser) {
+		ser.WriteData(target_value.bytes, 16);
 	}
 };
 

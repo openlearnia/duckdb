@@ -1,0 +1,43 @@
+# name: test/sql/copy/parquet/writer/parquet_write_int128_exact.test
+# description: Parquet preserves exact signed and unsigned 128-bit values recursively
+# group: [writer]
+
+require parquet
+
+statement ok
+CREATE TABLE src AS SELECT i, x::HUGEINT x, u::UHUGEINT u FROM (VALUES (1, '-170141183460469231731687303715884105728', '340282366920938463463374607431768211455'), (2, '170141183460469231731687303715884105727', '9007199254740993'), (3, '100000000000000000000000000000000000000', '0'), (4, NULL, NULL)) t(i,x,u)
+
+statement ok
+COPY (SELECT *, struct_pack(x := x, u := u) s, [x, NULL] xs, [u, NULL] us FROM src) TO '{TEST_DIR}/int128_exact.parquet' (FORMAT PARQUET)
+
+query II
+SELECT COUNT(*), COUNT(*) FILTER (WHERE p.x IS NOT DISTINCT FROM src.x AND p.u IS NOT DISTINCT FROM src.u AND p.s.x IS NOT DISTINCT FROM src.x AND p.s.u IS NOT DISTINCT FROM src.u AND p.xs[1] IS NOT DISTINCT FROM src.x AND p.us[1] IS NOT DISTINCT FROM src.u AND typeof(p.x) = 'HUGEINT' AND typeof(p.u) = 'UHUGEINT') FROM read_parquet('{TEST_DIR}/int128_exact.parquet') p JOIN src USING(i)
+----
+4	4
+
+query II
+SELECT COUNT(*) FILTER (WHERE x < 0), COUNT(*) FILTER (WHERE u = '340282366920938463463374607431768211455'::UHUGEINT) FROM read_parquet('{TEST_DIR}/int128_exact.parquet')
+----
+1	1
+
+# Unmarked DOUBLE and DECIMAL files retain their historical logical types.
+statement ok
+COPY (SELECT 42::DOUBLE d, 9007199254740993::DECIMAL(38,0) n) TO '{TEST_DIR}/int128_legacy.parquet' (FORMAT PARQUET)
+
+query TITT
+SELECT typeof(d), n, typeof(n), typeof(n::HUGEINT) FROM read_parquet('{TEST_DIR}/int128_legacy.parquet')
+----
+DOUBLE	9007199254740993	DECIMAL(38,0)	HUGEINT
+
+statement error
+COPY (SELECT 1) TO '{TEST_DIR}/int128_reserved.parquet' (FORMAT PARQUET, KV_METADATA {'duckdb.int128.1': 'HUGEINT'})
+----
+Parquet metadata keys starting with duckdb.int128. are reserved
+
+statement ok
+COPY (SELECT from_hex('80000000000000000000000000000000') b) TO '{TEST_DIR}/int128_blob.parquet' (FORMAT PARQUET)
+
+query T
+SELECT typeof(b) FROM read_parquet('{TEST_DIR}/int128_blob.parquet')
+----
+BLOB

@@ -205,9 +205,7 @@ bool TableCatalogEntry::MaterializedViewIsStale(ClientContext &context) {
 		auto &storage = dependency->Cast<TableCatalogEntry>().GetStorage();
 		auto generation = storage.GetModificationGeneration();
 		auto &transaction = DuckTransaction::Get(context, dependency->ParentCatalog());
-		if (transaction.HasModifiedTable(storage)) {
-			generation++;
-		}
+		generation += transaction.GetTableMutationCount(storage);
 		if (generation != materialized_view_dependency_generations[i]) {
 			return true;
 		}

@@ -1,0 +1,147 @@
+# name: test/sql/catalog/materialized_view/native_mv_refresh_after_alter.test
+# description: Pending source mutations retain their freshness generations across physical table replacements
+# group: [materialized_view]
+
+statement ok
+CREATE TABLE source(v INTEGER, x INTEGER)
+
+statement ok
+INSERT INTO source VALUES (10, 1)
+
+statement ok
+CREATE MATERIALIZED VIEW mv AS SELECT v FROM source
+
+statement ok
+BEGIN
+
+statement ok
+INSERT INTO source VALUES (20, 2)
+
+statement ok
+ALTER TABLE source ADD COLUMN y INTEGER
+
+statement ok
+REFRESH MATERIALIZED VIEW mv
+
+statement ok
+COMMIT
+
+query I
+SELECT CAST(is_stale AS INTEGER) FROM duckdb_materialized_views() WHERE view_name='mv'
+----
+0
+
+statement ok
+DROP MATERIALIZED VIEW mv
+
+# No local append exists: the committed-row UPDATE must move too.
+statement ok
+BEGIN
+
+statement ok
+UPDATE source SET v=30 WHERE v=20
+
+statement ok
+ALTER TABLE source DROP COLUMN y
+
+statement ok
+CREATE MATERIALIZED VIEW mv AS SELECT v FROM source
+
+statement ok
+COMMIT
+
+query I
+SELECT CAST(is_stale AS INTEGER) FROM duckdb_materialized_views() WHERE view_name='mv'
+----
+0
+
+statement ok
+DROP MATERIALIZED VIEW mv
+
+statement ok
+BEGIN
+
+statement ok
+INSERT INTO source VALUES (40, 4)
+
+statement ok
+ALTER TABLE source ALTER COLUMN x TYPE BIGINT
+
+statement ok
+CREATE MATERIALIZED VIEW mv AS SELECT v FROM source
+
+statement ok
+COMMIT
+
+query I
+SELECT CAST(is_stale AS INTEGER) FROM duckdb_materialized_views() WHERE view_name='mv'
+----
+0
+
+statement ok
+DROP MATERIALIZED VIEW mv
+
+statement ok
+BEGIN
+
+statement ok
+INSERT INTO source VALUES (50, 5)
+
+statement ok
+ALTER TABLE source ALTER COLUMN x SET NOT NULL
+
+statement ok
+CREATE MATERIALIZED VIEW mv AS SELECT v FROM source
+
+statement ok
+COMMIT
+
+query I
+SELECT CAST(is_stale AS INTEGER) FROM duckdb_materialized_views() WHERE view_name='mv'
+----
+0
+
+query I rowsort
+SELECT v FROM mv
+----
+10
+30
+40
+50
+
+# A later write still invalidates a view captured after replacement.
+statement ok
+BEGIN
+
+statement ok
+INSERT INTO source VALUES (60, 6)
+
+statement ok
+ALTER TABLE source ADD COLUMN z INTEGER
+
+statement ok
+REFRESH MATERIALIZED VIEW mv
+
+statement ok
+UPDATE source SET v=70 WHERE v=60
+
+query I
+SELECT CAST(is_stale AS INTEGER) FROM duckdb_materialized_views() WHERE view_name='mv'
+----
+1
+
+statement ok
+REFRESH MATERIALIZED VIEW IF STALE mv
+
+statement ok
+COMMIT
+
+query I
+SELECT CAST(is_stale AS INTEGER) FROM duckdb_materialized_views() WHERE view_name='mv'
+----
+0
+
+query I
+SELECT COUNT(*) FROM mv WHERE v=70
+----
+1

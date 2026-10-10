@@ -22,6 +22,11 @@ class RowGroupCollection;
 class RowVersionManager;
 class DuckTransactionManager;
 enum class TableModificationType : uint8_t { APPEND = 1, DELETE = 2, UPDATE = 4, ALL = 7 };
+struct TableMutationCounts {
+	idx_t appends = 0;
+	idx_t deletes = 0;
+	idx_t updates = 0;
+};
 class StorageLockKey;
 class StorageCommitState;
 class DataTable;
@@ -101,6 +106,12 @@ public:
 	UndoBufferReference CreateUpdateInfo(DuckTableEntry &table_entry, idx_t type_size, idx_t entries,
 	                                     idx_t row_group_start);
 	void ModifyTable(DataTable &table, TableModificationType type = TableModificationType::ALL);
+	//! Record a successful row mutation before commit-time appends are flushed.
+	void RecordTableMutation(DataTable &table, TableModificationType type);
+	idx_t GetTableMutationCount(DataTable &table, TableModificationType type = TableModificationType::ALL) const;
+	TableMutationCounts GetTableMutationCounts(DataTable &table) const;
+	//! Preserve pending mutations when ALTER replaces a table's physical storage.
+	void MoveTableModifications(DataTable &old_table, DataTable &new_table);
 	//! Returns whether this transaction has modified the specified physical table.
 	bool HasModifiedTable(DataTable &table) const;
 	//! Returns the modification categories recorded for a table in this transaction.
@@ -138,6 +149,8 @@ private:
 	//! Physical tables modified by this transaction, used for MV freshness checks.
 	reference_set_t<DataTable> modified_tables;
 	reference_map_t<DataTable, uint8_t> modified_table_types;
+	mutable mutex table_modification_lock;
+	reference_map_t<DataTable, TableMutationCounts> table_mutation_counts;
 	//! Flag to prevent auto-checkpointing inside a checkpoint transaction.
 	bool is_checkpoint_transaction = false;
 };

@@ -474,6 +474,11 @@ void LocalStorage::Append(LocalAppendState &state, DuckTableEntry &table_entry, 
 
 	// Append the chunk to the local storage.
 	auto flushed_row_group_idx = storage->GetCollection().Append(table_chunk, state.append_state);
+	if (table_chunk.size() > 0) {
+		D_ASSERT(state.append_state.transaction.transaction);
+		state.append_state.transaction.transaction->RecordTableMutation(table_entry.GetStorage(),
+		                                                                TableModificationType::APPEND);
+	}
 
 	// Check if we should pre-emptively flush blocks to disk.
 	if (flushed_row_group_idx.IsValid()) {
@@ -486,6 +491,7 @@ void LocalStorage::FinalizeAppend(LocalAppendState &state) {
 }
 
 void LocalStorage::LocalMerge(DataTable &table, DuckTableEntry &table_entry, OptimisticWriteCollection &collection) {
+	auto row_count = collection.collection->GetTotalRows();
 	auto &storage = table_manager.GetOrCreateStorage(context, table);
 	storage.table_entry = &table_entry;
 	if (!storage.append_indexes.Empty()) {
@@ -499,6 +505,9 @@ void LocalStorage::LocalMerge(DataTable &table, DuckTableEntry &table_entry, Opt
 	}
 	auto &target = storage.GetPrimaryCollection();
 	target.MergeStorage(collection);
+	if (row_count > 0) {
+		transaction.RecordTableMutation(table, TableModificationType::APPEND);
+	}
 }
 
 PhysicalIndex LocalStorage::CreateOptimisticCollection(DataTable &table,
@@ -548,6 +557,9 @@ idx_t LocalStorage::Delete(DataTable &table, DuckTableEntry &table_entry, Vector
 	auto ids = FlatVector::GetDataMutable<row_t>(row_ids);
 	idx_t delete_count = storage->GetCollection().Delete(TransactionData::Unversioned(), table_entry, ids, count);
 	storage->deleted_rows += delete_count;
+	if (delete_count > 0) {
+		transaction.RecordTableMutation(table, TableModificationType::DELETE);
+	}
 	return delete_count;
 }
 
@@ -559,6 +571,7 @@ void LocalStorage::Update(DataTable &table, DuckTableEntry &table_entry, Vector 
 
 	auto ids = FlatVector::GetDataMutable<row_t>(row_ids);
 	storage->GetCollection().Update(TransactionData::Unversioned(), table_entry, ids, column_ids, updates);
+	transaction.RecordTableMutation(table, TableModificationType::UPDATE);
 }
 
 void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_ptr<StorageCommitState> commit_state) {

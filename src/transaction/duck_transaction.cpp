@@ -100,7 +100,7 @@ void DuckTransaction::PushAttach(AttachedDatabase &db) {
 
 void DuckTransaction::PushDelete(DuckTableEntry &table_entry, RowVersionManager &info, idx_t vector_idx, row_t rows[],
                                  idx_t count, idx_t base_row) {
-	ModifyTable(table_entry.GetStorage(), TableModificationType::DELETE);
+	RecordTableMutation(table_entry.GetStorage(), TableModificationType::DELETE);
 	bool is_consecutive = true;
 	// check if the rows are consecutive
 	for (idx_t i = 0; i < count; i++) {
@@ -323,10 +323,21 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, CommitInfo &commit_info,
 			auto modification_type = type_entry == modified_table_types.end()
 			                             ? static_cast<uint8_t>(TableModificationType::ALL)
 			                             : type_entry->second;
-			table.get().CommitModification(modification_type);
+			auto mutation_counts = GetTableMutationCounts(table);
+			if (modification_type & static_cast<uint8_t>(TableModificationType::APPEND)) {
+				mutation_counts.appends = MaxValue<idx_t>(mutation_counts.appends, 1);
+			}
+			if (modification_type & static_cast<uint8_t>(TableModificationType::DELETE)) {
+				mutation_counts.deletes = MaxValue<idx_t>(mutation_counts.deletes, 1);
+			}
+			if (modification_type & static_cast<uint8_t>(TableModificationType::UPDATE)) {
+				mutation_counts.updates = MaxValue<idx_t>(mutation_counts.updates, 1);
+			}
+			table.get().CommitModification(mutation_counts, commit_id);
 		}
 		modified_tables.clear();
 		modified_table_types.clear();
+		table_mutation_counts.clear();
 		return ErrorData();
 	} catch (std::exception &ex) {
 		// Record the error and run RevertCommit() outside this try-catch: RevertCommit() iterates the
@@ -368,6 +379,7 @@ ErrorData DuckTransaction::Rollback() {
 		undo_buffer.Rollback();
 		modified_tables.clear();
 		modified_table_types.clear();
+		table_mutation_counts.clear();
 		return ErrorData();
 	} catch (std::exception &ex) {
 		return ErrorData(ex);
@@ -379,6 +391,7 @@ bool DuckTransaction::HasModifiedTable(DataTable &table) const {
 }
 
 void DuckTransaction::ModifyTable(DataTable &table, TableModificationType type) {
+	lock_guard<mutex> lock(table_modification_lock);
 	modified_tables.insert(table);
 	auto entry = modified_table_types.find(table);
 	if (entry == modified_table_types.end()) {
@@ -388,7 +401,69 @@ void DuckTransaction::ModifyTable(DataTable &table, TableModificationType type) 
 	}
 }
 
+void DuckTransaction::RecordTableMutation(DataTable &table, TableModificationType type) {
+	ModifyTable(table, type);
+	lock_guard<mutex> lock(table_modification_lock);
+	auto &counts = table_mutation_counts[table];
+	if (static_cast<uint8_t>(type) & static_cast<uint8_t>(TableModificationType::APPEND)) {
+		counts.appends++;
+	}
+	if (static_cast<uint8_t>(type) & static_cast<uint8_t>(TableModificationType::DELETE)) {
+		counts.deletes++;
+	}
+	if (static_cast<uint8_t>(type) & static_cast<uint8_t>(TableModificationType::UPDATE)) {
+		counts.updates++;
+	}
+}
+
+TableMutationCounts DuckTransaction::GetTableMutationCounts(DataTable &table) const {
+	lock_guard<mutex> lock(table_modification_lock);
+	auto entry = table_mutation_counts.find(table);
+	return entry == table_mutation_counts.end() ? TableMutationCounts() : entry->second;
+}
+
+void DuckTransaction::MoveTableModifications(DataTable &old_table, DataTable &new_table) {
+	if (&old_table == &new_table) {
+		return;
+	}
+	lock_guard<mutex> lock(table_modification_lock);
+	if (modified_tables.erase(old_table)) {
+		modified_tables.insert(new_table);
+	}
+	auto type_entry = modified_table_types.find(old_table);
+	if (type_entry != modified_table_types.end()) {
+		auto modification_type = type_entry->second;
+		modified_table_types.erase(type_entry);
+		modified_table_types[new_table] |= modification_type;
+	}
+	auto count_entry = table_mutation_counts.find(old_table);
+	if (count_entry != table_mutation_counts.end()) {
+		auto old_counts = count_entry->second;
+		table_mutation_counts.erase(count_entry);
+		auto &new_counts = table_mutation_counts[new_table];
+		new_counts.appends += old_counts.appends;
+		new_counts.deletes += old_counts.deletes;
+		new_counts.updates += old_counts.updates;
+	}
+}
+
+idx_t DuckTransaction::GetTableMutationCount(DataTable &table, TableModificationType type) const {
+	auto counts = GetTableMutationCounts(table);
+	idx_t result = 0;
+	if (static_cast<uint8_t>(type) & static_cast<uint8_t>(TableModificationType::APPEND)) {
+		result += counts.appends;
+	}
+	if (static_cast<uint8_t>(type) & static_cast<uint8_t>(TableModificationType::DELETE)) {
+		result += counts.deletes;
+	}
+	if (static_cast<uint8_t>(type) & static_cast<uint8_t>(TableModificationType::UPDATE)) {
+		result += counts.updates;
+	}
+	return result;
+}
+
 uint8_t DuckTransaction::GetTableModificationType(DataTable &table) const {
+	lock_guard<mutex> lock(table_modification_lock);
 	uint8_t result = 0;
 	auto entry = modified_table_types.find(table);
 	if (entry != modified_table_types.end()) {

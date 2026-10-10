@@ -93,9 +93,10 @@ DataTable::DataTable(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_m
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition &new_column, Expression &default_value)
     : db(parent.db), info(parent.info), version(DataTableVersion::MAIN_TABLE),
-      modification_generation(parent.GetModificationGeneration()), append_generation(parent.GetAppendGeneration()),
-      delete_generation(parent.GetDeleteGeneration()), update_generation(parent.GetUpdateGeneration()),
-      appended_rows(parent.GetAppendedRows()) {
+      modification_generation(parent.GetModificationGeneration()),
+      last_modification_commit_id(parent.GetLastModificationCommitId()),
+      append_generation(parent.GetAppendGeneration()), delete_generation(parent.GetDeleteGeneration()),
+      update_generation(parent.GetUpdateGeneration()), appended_rows(parent.GetAppendedRows()) {
 	// add the column definitions from this DataTable
 	for (auto &column_def : parent.column_definitions) {
 		column_definitions.emplace_back(column_def.Copy());
@@ -114,6 +115,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 
 	// also add this column to client local storage
 	local_storage.AddColumn(parent, *this, new_column, default_executor);
+	DuckTransaction::Get(context, db).MoveTableModifications(parent, *this);
 
 	// this table replaces the previous table, hence the parent is no longer the root DataTable
 	parent.version = DataTableVersion::ALTERED;
@@ -121,9 +123,10 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_column)
     : db(parent.db), info(parent.info), version(DataTableVersion::MAIN_TABLE),
-      modification_generation(parent.GetModificationGeneration()), append_generation(parent.GetAppendGeneration()),
-      delete_generation(parent.GetDeleteGeneration()), update_generation(parent.GetUpdateGeneration()),
-      appended_rows(parent.GetAppendedRows()) {
+      modification_generation(parent.GetModificationGeneration()),
+      last_modification_commit_id(parent.GetLastModificationCommitId()),
+      append_generation(parent.GetAppendGeneration()), delete_generation(parent.GetDeleteGeneration()),
+      update_generation(parent.GetUpdateGeneration()), appended_rows(parent.GetAppendedRows()) {
 	// prevent any new tuples from being added to the parent
 	auto &local_storage = LocalStorage::Get(context, db);
 	lock_guard<mutex> parent_lock(parent.append_lock);
@@ -163,6 +166,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 
 	// scan the original table, and fill the new column with the transformed value
 	local_storage.DropColumn(parent, *this, removed_column);
+	DuckTransaction::Get(context, db).MoveTableModifications(parent, *this);
 
 	// this table replaces the previous table, hence the parent is no longer the root DataTable
 	parent.version = DataTableVersion::ALTERED;
@@ -170,9 +174,10 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, BoundConstraint &constraint)
     : db(parent.db), info(parent.info), row_groups(parent.row_groups), version(DataTableVersion::MAIN_TABLE),
-      modification_generation(parent.GetModificationGeneration()), append_generation(parent.GetAppendGeneration()),
-      delete_generation(parent.GetDeleteGeneration()), update_generation(parent.GetUpdateGeneration()),
-      appended_rows(parent.GetAppendedRows()) {
+      modification_generation(parent.GetModificationGeneration()),
+      last_modification_commit_id(parent.GetLastModificationCommitId()),
+      append_generation(parent.GetAppendGeneration()), delete_generation(parent.GetDeleteGeneration()),
+      update_generation(parent.GetUpdateGeneration()), appended_rows(parent.GetAppendedRows()) {
 	// ALTER COLUMN to add a new constraint.
 
 	// Bind all indexes.
@@ -188,6 +193,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, BoundConstraint 
 		VerifyNewConstraint(local_storage, parent, constraint);
 	}
 	local_storage.MoveStorage(parent, *this);
+	DuckTransaction::Get(context, db).MoveTableModifications(parent, *this);
 	parent.version = DataTableVersion::ALTERED;
 }
 
@@ -195,9 +201,10 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
                      const vector<StorageIndex> &bound_columns, Expression &cast_expr,
                      optional_ptr<BoundConstraint> constraint_to_verify)
     : db(parent.db), info(parent.info), version(DataTableVersion::MAIN_TABLE),
-      modification_generation(parent.GetModificationGeneration()), append_generation(parent.GetAppendGeneration()),
-      delete_generation(parent.GetDeleteGeneration()), update_generation(parent.GetUpdateGeneration()),
-      appended_rows(parent.GetAppendedRows()) {
+      modification_generation(parent.GetModificationGeneration()),
+      last_modification_commit_id(parent.GetLastModificationCommitId()),
+      append_generation(parent.GetAppendGeneration()), delete_generation(parent.GetDeleteGeneration()),
+      update_generation(parent.GetUpdateGeneration()), appended_rows(parent.GetAppendedRows()) {
 	auto &transaction = DuckTransaction::Get(context, db);
 	auto &local_storage = LocalStorage::Get(transaction);
 	// prevent any tuples from being added to the parent
@@ -245,6 +252,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 		parent.version = previous_version;
 		throw;
 	}
+	transaction.MoveTableModifications(parent, *this);
 }
 
 vector<LogicalType> DataTable::GetTypes() {
@@ -1228,21 +1236,30 @@ void DataTable::CommitAppend(transaction_t commit_id, idx_t row_start, idx_t cou
 	appended_rows += count;
 }
 
-void DataTable::CommitModification(uint8_t modification_type) {
-	modification_generation++;
-	if (modification_type & static_cast<uint8_t>(TableModificationType::APPEND)) {
-		append_generation++;
-	}
-	if (modification_type & static_cast<uint8_t>(TableModificationType::DELETE)) {
-		delete_generation++;
-	}
-	if (modification_type & static_cast<uint8_t>(TableModificationType::UPDATE)) {
-		update_generation++;
-	}
+void DataTable::CommitModification(const TableMutationCounts &mutation_counts, transaction_t commit_id) {
+	lock_guard<mutex> lock(modification_lock);
+	modification_generation += mutation_counts.appends + mutation_counts.deletes + mutation_counts.updates;
+	last_modification_commit_id = commit_id;
+	append_generation += mutation_counts.appends;
+	delete_generation += mutation_counts.deletes;
+	update_generation += mutation_counts.updates;
 }
 
 idx_t DataTable::GetModificationGeneration() const {
 	return modification_generation.load();
+}
+
+optional_idx DataTable::GetVisibleModificationGeneration(const SnapshotView &view) const {
+	lock_guard<mutex> lock(modification_lock);
+	if (last_modification_commit_id != 0 && !view.Sees(last_modification_commit_id)) {
+		return optional_idx();
+	}
+	return optional_idx(modification_generation.load());
+}
+
+transaction_t DataTable::GetLastModificationCommitId() const {
+	lock_guard<mutex> lock(modification_lock);
+	return last_modification_commit_id;
 }
 
 idx_t DataTable::GetAppendGeneration() const {
@@ -1574,6 +1591,7 @@ void DataTable::Update(TableUpdateState &state, ClientContext &context, DuckTabl
 
 		row_groups->Update(transaction, table_entry, FlatVector::GetDataMutable<row_t>(row_ids_slice), column_ids,
 		                   updates_slice);
+		transaction.RecordTableMutation(*this, TableModificationType::UPDATE);
 	}
 }
 
@@ -1598,6 +1616,7 @@ void DataTable::UpdateColumn(DuckTableEntry &table, ClientContext &context, Vect
 	updates.Flatten();
 	row_ids.Flatten();
 	row_groups->UpdateColumn(transaction, table, row_ids, column_path, updates);
+	transaction.RecordTableMutation(*this, TableModificationType::UPDATE);
 }
 
 //===--------------------------------------------------------------------===//

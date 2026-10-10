@@ -15,6 +15,7 @@
 #include "brotli/decode.h"
 #include "reader/callback_column_reader.hpp"
 #include "reader/interval_column_reader.hpp"
+#include "reader/int128_column_reader.hpp"
 #include "lz4.hpp"
 #include "miniz_wrapper.hpp"
 #include "reader/null_column_reader.hpp"
@@ -1032,6 +1033,10 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(const ParquetReader &reader,
 		return make_uniq<TemplatedColumnReader<int32_t, TemplatedParquetValueConversion<int32_t>>>(reader, schema);
 	case LogicalTypeId::BIGINT:
 		return make_uniq<TemplatedColumnReader<int64_t, TemplatedParquetValueConversion<int64_t>>>(reader, schema);
+	case LogicalTypeId::HUGEINT:
+		return make_uniq<Int128ColumnReader<hugeint_t>>(reader, schema);
+	case LogicalTypeId::UHUGEINT:
+		return make_uniq<Int128ColumnReader<uhugeint_t>>(reader, schema);
 	case LogicalTypeId::FLOAT:
 		if (schema.type_info == ParquetExtraTypeInfo::FLOAT16) {
 			return make_uniq<CallbackColumnReader<uint16_t, float, Float16ToFloat32>>(reader, schema);

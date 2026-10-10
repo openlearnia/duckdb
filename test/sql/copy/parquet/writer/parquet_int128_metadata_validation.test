@@ -1,0 +1,11 @@
+# name: test/sql/copy/parquet/writer/parquet_int128_metadata_validation.test
+# description: conflicting 128-bit footer markers are rejected regardless of footer order
+# group: [writer]
+
+require parquet
+
+# Zero-row FIXED_LEN_BYTE_ARRAY(16) file with duplicate HUGEINT and UHUGEINT markers.
+statement error
+DESCRIBE SELECT * FROM read_parquet('data/parquet/int128_duplicate_marker.parquet')
+----
+Duplicate Parquet 128-bit integer metadata

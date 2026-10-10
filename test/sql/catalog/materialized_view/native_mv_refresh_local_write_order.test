@@ -1,0 +1,71 @@
+# name: test/sql/catalog/materialized_view/native_mv_refresh_local_write_order.test
+# description: Updates and same-count replacements of local appends after refresh invalidate the view
+# group: [materialized_view]
+
+statement ok
+CREATE TABLE source(id INTEGER, v INTEGER)
+
+statement ok
+INSERT INTO source VALUES (1, 10)
+
+statement ok
+CREATE MATERIALIZED VIEW mv AS SELECT * FROM source
+
+statement ok
+BEGIN
+
+statement ok
+INSERT INTO source VALUES (2, 20)
+
+statement ok
+REFRESH MATERIALIZED VIEW mv
+
+statement ok
+UPDATE source SET v=30 WHERE id=2
+
+query I
+SELECT CAST(is_stale AS INTEGER) FROM duckdb_materialized_views() WHERE view_name='mv'
+----
+1
+
+statement ok
+REFRESH MATERIALIZED VIEW IF STALE mv
+
+query II rowsort
+SELECT * FROM mv
+----
+1	10
+2	30
+
+statement ok
+DELETE FROM source WHERE id=2
+
+statement ok
+INSERT INTO source VALUES (3, 40)
+
+query I
+SELECT CAST(is_stale AS INTEGER) FROM duckdb_materialized_views() WHERE view_name='mv'
+----
+1
+
+statement ok
+COMMIT
+
+query I
+SELECT CAST(is_stale AS INTEGER) FROM duckdb_materialized_views() WHERE view_name='mv'
+----
+1
+
+statement ok
+REFRESH MATERIALIZED VIEW IF STALE mv
+
+query II rowsort
+SELECT * FROM mv
+----
+1	10
+3	40
+
+query I
+SELECT CAST(is_stale AS INTEGER) FROM duckdb_materialized_views() WHERE view_name='mv'
+----
+0

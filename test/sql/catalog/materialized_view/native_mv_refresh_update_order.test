@@ -1,0 +1,130 @@
+# name: test/sql/catalog/materialized_view/native_mv_refresh_update_order.test
+# description: Updates after refresh remain stale across commit even after an earlier update
+# group: [materialized_view]
+
+statement ok
+CREATE TABLE source(v INTEGER)
+
+statement ok
+INSERT INTO source VALUES (10)
+
+statement ok
+CREATE MATERIALIZED VIEW mv AS SELECT v FROM source
+
+statement ok
+BEGIN
+
+statement ok
+UPDATE source SET v=11
+
+statement ok
+REFRESH MATERIALIZED VIEW mv
+
+query I
+SELECT CAST(is_stale AS INTEGER) FROM duckdb_materialized_views() WHERE view_name='mv'
+----
+0
+
+statement ok
+UPDATE source SET v=30
+
+query I
+SELECT CAST(is_stale AS INTEGER) FROM duckdb_materialized_views() WHERE view_name='mv'
+----
+1
+
+statement ok
+SET materialized_view_stale_read='error'
+
+statement error
+SELECT * FROM mv
+----
+<REGEX>:.*is stale.*
+
+# The expected binding error aborts this transaction. Repeat the writes in a
+# new transaction to test the guard independently after a successful commit.
+statement ok
+ROLLBACK
+
+statement ok
+BEGIN
+
+statement ok
+UPDATE source SET v=11
+
+statement ok
+REFRESH MATERIALIZED VIEW mv
+
+statement ok
+UPDATE source SET v=30
+
+statement ok
+COMMIT
+
+statement error
+SELECT * FROM mv
+----
+<REGEX>:.*is stale.*
+
+statement ok
+REFRESH MATERIALIZED VIEW IF STALE mv
+
+query I
+SELECT * FROM mv
+----
+30
+
+query I
+SELECT CAST(is_stale AS INTEGER) FROM duckdb_materialized_views() WHERE view_name='mv'
+----
+0
+
+# Rolled-back mutations and refresh metadata leave the committed view fresh.
+statement ok
+BEGIN
+
+statement ok
+UPDATE source SET v=40
+
+statement ok
+REFRESH MATERIALIZED VIEW mv
+
+statement ok
+UPDATE source SET v=50
+
+statement ok
+ROLLBACK
+
+query II
+SELECT v, CAST((SELECT is_stale FROM duckdb_materialized_views() WHERE view_name='mv') AS INTEGER) FROM mv
+----
+30	0
+
+# A refresh after the final append must stay fresh after committing that append.
+statement ok
+BEGIN
+
+statement ok
+INSERT INTO source VALUES (60)
+
+statement ok
+REFRESH MATERIALIZED VIEW mv
+
+statement ok
+COMMIT
+
+query I rowsort
+SELECT * FROM mv
+----
+30
+60
+
+query T
+SELECT current_setting('materialized_view_stale_read')
+----
+error
+
+query I
+SELECT CAST(is_stale AS INTEGER) FROM duckdb_materialized_views() WHERE view_name='mv'
+----
+0
