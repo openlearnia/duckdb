@@ -188,7 +188,8 @@ bool TableCatalogEntry::MaterializedViewIsStale(ClientContext &context) {
 	if (materialized_view_dependency_catalogs.empty() ||
 	    materialized_view_dependency_catalogs.size() != materialized_view_dependency_schemas.size() ||
 	    materialized_view_dependency_catalogs.size() != materialized_view_dependency_tables.size() ||
-	    materialized_view_dependency_catalogs.size() != materialized_view_dependency_generations.size()) {
+	    materialized_view_dependency_catalogs.size() != materialized_view_dependency_generations.size() ||
+	    materialized_view_dependency_catalogs.size() != materialized_view_dependency_row_counts.size()) {
 		return true;
 	}
 	for (idx_t i = 0; i < materialized_view_dependency_catalogs.size(); i++) {
@@ -208,6 +209,16 @@ bool TableCatalogEntry::MaterializedViewIsStale(ClientContext &context) {
 			generation++;
 		}
 		if (generation != materialized_view_dependency_generations[i]) {
+			return true;
+		}
+		// Generations cannot see write ordering inside one transaction: a refresh that
+		// incorporated this transaction's earlier appends records the same bumped generation
+		// the commit later produces. The appended-row count distinguishes them - rows appended
+		// after the refresh (or by a concurrent writer that committed in between) are not
+		// incorporated and leave the view stale.
+		auto local_appends = transaction.GetLocalStorage().AddedRows(storage);
+		auto current_appended_rows = storage.GetAppendedRows() + local_appends;
+		if (current_appended_rows != materialized_view_dependency_row_counts[i]) {
 			return true;
 		}
 	}
