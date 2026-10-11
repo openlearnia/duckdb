@@ -719,8 +719,16 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		if (base.materialized_view) {
 			materialized_view_candidate_sql = base.query->ToString();
 		}
+		// binding consumes the parsed query
+		unique_ptr<SQLStatement> unbound_materialized_view;
+		if (base.materialized_view) {
+			unbound_materialized_view = base.query->Copy();
+		}
 		// construct the result object
 		auto query_obj = Bind(*base.query);
+		if (base.materialized_view) {
+			VerifyMaterializedViewDeterministic(unbound_materialized_view->Cast<SelectStatement>(), *query_obj.plan);
+		}
 		base.query.reset();
 		result->query = std::move(query_obj.plan);
 		if (base.materialized_view) {

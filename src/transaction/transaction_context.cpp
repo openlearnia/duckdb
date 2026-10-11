@@ -34,7 +34,7 @@ TransactionContext::~TransactionContext() {
 }
 
 void TransactionContext::BeginTransaction() {
-	if (current_transaction) {
+	if (HasActiveTransaction()) {
 		throw TransactionException("cannot start a transaction within a transaction");
 	}
 	auto start_timestamp = Timestamp::GetCurrentTimestamp();
@@ -45,6 +45,19 @@ void TransactionContext::BeginTransaction() {
 	for (auto &state : context.registered_state->States()) {
 		state->TransactionBegin(*current_transaction, context);
 	}
+}
+
+void TransactionContext::BorrowTransaction(MetaTransaction &transaction) {
+	if (HasActiveTransaction()) {
+		throw InternalException("TransactionContext::BorrowTransaction called within a transaction");
+	}
+	borrowed_transaction = &transaction;
+	auto_commit = false;
+}
+
+void TransactionContext::EndBorrowTransaction() {
+	borrowed_transaction = nullptr;
+	auto_commit = true;
 }
 
 void TransactionContext::SetInvalidationPolicy(TransactionInvalidationPolicy new_invalidation_policy) {
@@ -60,6 +73,9 @@ void TransactionContext::SetAutocheckpointError(ErrorData error) {
 }
 
 void TransactionContext::Commit() {
+	if (borrowed_transaction) {
+		throw TransactionException("cannot commit a transaction that belongs to another connection");
+	}
 	if (!current_transaction) {
 		throw TransactionException("failed to commit: no transaction active");
 	}
@@ -91,16 +107,19 @@ void TransactionContext::Commit() {
 
 void TransactionContext::SetAutoCommit(bool value) {
 	auto_commit = value;
-	if (!auto_commit && !current_transaction) {
+	if (!auto_commit && !HasActiveTransaction()) {
 		BeginTransaction();
 	}
 }
 
 void TransactionContext::SetReadOnly() {
-	current_transaction->SetReadOnly();
+	ActiveTransaction().SetReadOnly();
 }
 
 void TransactionContext::Rollback(optional_ptr<ErrorData> error) {
+	if (borrowed_transaction) {
+		throw TransactionException("cannot roll back a transaction that belongs to another connection");
+	}
 	if (!current_transaction) {
 		throw TransactionException("failed to rollback: no transaction active");
 	}
@@ -130,23 +149,25 @@ void TransactionContext::ClearTransaction() {
 }
 
 idx_t TransactionContext::GetActiveQuery() {
-	if (!current_transaction) {
+	auto transaction = CurrentTransaction();
+	if (!transaction) {
 		throw InternalException("GetActiveQuery called without active transaction");
 	}
-	return current_transaction->GetActiveQuery();
+	return transaction->GetActiveQuery();
 }
 
 void TransactionContext::ResetActiveQuery() {
-	if (current_transaction) {
+	if (HasActiveTransaction()) {
 		SetActiveQuery(MAXIMUM_QUERY_ID);
 	}
 }
 
 void TransactionContext::SetActiveQuery(transaction_t query_number) {
-	if (!current_transaction) {
+	auto transaction = CurrentTransaction();
+	if (!transaction) {
 		throw InternalException("SetActiveQuery called without active transaction");
 	}
-	current_transaction->SetActiveQuery(query_number);
+	transaction->SetActiveQuery(query_number);
 }
 
 } // namespace duckdb

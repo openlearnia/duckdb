@@ -638,14 +638,17 @@ unique_ptr<QueryResult> ClientContext::SubmitPreparedStatementInternal(
 	// Decide how to get the result collector.
 	get_result_collector_t get_collector = PhysicalResultCollector::GetResultCollector;
 	auto &client_config = ClientConfig::GetConfig(*this);
-	const bool delegating = client_config.get_result_collector != nullptr;
-	if (delegating) {
+	if (client_config.get_result_collector) {
 		get_collector = client_config.get_result_collector;
 	}
 
 	// Get the result collector and initialize the executor.
 	auto collector = get_collector(*this, statement_data);
 	D_ASSERT(collector->type == PhysicalOperatorType::RESULT_COLLECTOR);
+	// A collector hook may return the default sink for statements it does not take (Quack streams only the first
+	// statement that returns rows). That sink needs the buffer like any other, or its statement never completes and
+	// keeps its auto-commit transaction open, so the next statement of a batch cannot begin one.
+	const bool delegating = !collector->Cast<PhysicalResultCollector>().UsesResultBuffer();
 
 	// The buffer is created here, on the client thread, and handed to the sink, the executor and the
 	// handle. It carries the retention decision, so it exists for every query the sink serves
@@ -1117,8 +1120,11 @@ unique_ptr<QueryResult> ClientContext::SubmitStatement(ClientContextLock &lock, 
 		result = ErrorResult<QueryResult>(std::move(error), query);
 	}
 	if (result->HasError()) {
-		// query failed: abort now
-		EndQueryInternal(lock, false, invalidate_query, result->GetErrorObject());
+		// query failed: abort now. A collector that builds its own result object has already ended a query that
+		// failed while it ran, so there may be nothing left to end
+		if (active_query) {
+			EndQueryInternal(lock, false, invalidate_query, result->GetErrorObject());
+		}
 		return result;
 	}
 	// A collector that builds its own result object finishes the query inside the submission, so

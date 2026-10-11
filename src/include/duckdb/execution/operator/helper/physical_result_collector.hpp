@@ -57,6 +57,11 @@ public:
 	virtual bool IsStreaming() const {
 		return false;
 	}
+	//! Whether this collector is fed through the buffer that the client context creates at submission (the default
+	//! result sink). Custom collectors build their own result instead.
+	virtual bool UsesResultBuffer() const {
+		return false;
+	}
 
 protected:
 	unique_ptr<ColumnDataCollection> CreateCollection(ClientContext &context) const;

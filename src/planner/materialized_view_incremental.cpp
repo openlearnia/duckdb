@@ -4,6 +4,7 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/parser/parser.hpp"
@@ -11,6 +12,13 @@
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_subquery_expression.hpp"
+#include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/local_storage.hpp"
@@ -349,6 +357,119 @@ bool TryBuildMaterializedViewIncrementalQuery(ClientContext &context, TableCatal
 	query = ParseIncrementalQuery(sql);
 	refresh_mode = "delta";
 	return true;
+}
+
+//! Functions that read session state at bind time and are folded into constants, so the bound plan cannot show them
+static bool IsSessionDependentFunction(const string &name) {
+	return StringUtil::CIEquals(name, "getvariable") || StringUtil::CIEquals(name, "current_setting");
+}
+
+static void FindSessionDependentFunction(QueryNode &node, string &found);
+
+static void FindSessionDependentFunction(ParsedExpression &expr, string &found) {
+	if (!found.empty()) {
+		return;
+	}
+	if (expr.GetExpressionClass() == ExpressionClass::FUNCTION) {
+		auto &name = expr.Cast<FunctionExpression>().FunctionName().GetIdentifierName();
+		if (IsSessionDependentFunction(name)) {
+			found = name;
+			return;
+		}
+	} else if (expr.GetExpressionClass() == ExpressionClass::SUBQUERY) {
+		auto &subquery = expr.Cast<SubqueryExpression>().Subquery();
+		if (subquery && subquery->node) {
+			FindSessionDependentFunction(*subquery->node, found);
+		}
+	}
+	ParsedExpressionIterator::EnumerateChildren(
+	    expr, [&](ParsedExpression &child) { FindSessionDependentFunction(child, found); });
+}
+
+static void FindSessionDependentFunction(QueryNode &node, string &found) {
+	ParsedExpressionIterator::EnumerateQueryNodeChildren(node, [&](unique_ptr<ParsedExpression> &child) {
+		if (child) {
+			FindSessionDependentFunction(*child, found);
+		}
+	});
+}
+
+static void FindUnstableFunction(const LogicalOperator &op, string &found);
+
+static void FindUnstableFunction(const Expression &expr, string &found) {
+	if (!found.empty()) {
+		return;
+	}
+	switch (expr.GetExpressionClass()) {
+	case ExpressionClass::BOUND_FUNCTION: {
+		auto &function = expr.Cast<BoundFunctionExpression>().Function();
+		if (function.GetStability() != FunctionStability::CONSISTENT) {
+			found = function.GetName().GetIdentifierName();
+			return;
+		}
+		break;
+	}
+	case ExpressionClass::BOUND_AGGREGATE: {
+		auto &function = expr.Cast<BoundAggregateExpression>().Function();
+		if (function.GetStability() != FunctionStability::CONSISTENT) {
+			found = function.GetName().GetIdentifierName();
+			return;
+		}
+		break;
+	}
+	case ExpressionClass::BOUND_WINDOW: {
+		auto &window = expr.Cast<BoundWindowExpression>();
+		auto &aggregate = window.AggregateFunction();
+		auto stability = aggregate ? aggregate->GetStability() : window.WindowFunction()->GetStability();
+		if (stability != FunctionStability::CONSISTENT) {
+			found = aggregate ? aggregate->GetName().GetIdentifierName()
+			                  : window.WindowFunction()->GetName().GetIdentifierName();
+			return;
+		}
+		break;
+	}
+	case ExpressionClass::BOUND_SUBQUERY: {
+		auto &subquery = expr.Cast<BoundSubqueryExpression>().Subquery();
+		if (subquery.plan) {
+			FindUnstableFunction(*subquery.plan, found);
+		}
+		break;
+	}
+	default:
+		break;
+	}
+	ExpressionIterator::EnumerateChildren(expr, [&](const Expression &child) { FindUnstableFunction(child, found); });
+}
+
+static void FindUnstableFunction(const LogicalOperator &op, string &found) {
+	LogicalOperatorVisitor::EnumerateExpressions(op, [&](const unique_ptr<Expression> *child) {
+		if (*child) {
+			FindUnstableFunction(**child, found);
+		}
+	});
+	for (auto &child : op.children) {
+		if (!found.empty()) {
+			return;
+		}
+		FindUnstableFunction(*child, found);
+	}
+}
+
+void VerifyMaterializedViewDeterministic(SelectStatement &definition, const LogicalOperator &plan) {
+	string found;
+	if (definition.node) {
+		FindSessionDependentFunction(*definition.node, found);
+	}
+	if (found.empty()) {
+		FindUnstableFunction(plan, found);
+	}
+	if (found.empty()) {
+		return;
+	}
+	throw BinderException("Materialized view definitions cannot use \"%s\": a materialized view is a snapshot of its "
+	                      "base tables, so its contents cannot depend on the time, random values or session state. "
+	                      "Filter on stored columns instead, or use a view",
+	                      found);
 }
 
 } // namespace duckdb

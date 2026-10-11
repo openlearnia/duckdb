@@ -30,17 +30,26 @@ public:
 	~TransactionContext();
 
 	MetaTransaction &ActiveTransaction() {
-		if (!current_transaction) {
+		auto transaction = CurrentTransaction();
+		if (!transaction) {
 			throw InternalException("TransactionContext::ActiveTransaction called without active transaction");
 		}
-		return *current_transaction;
+		return *transaction;
 	}
 
 	bool HasActiveTransaction() const {
-		return current_transaction.get();
+		return current_transaction || borrowed_transaction;
 	}
 
 	void BeginTransaction();
+	//! Run this context's statements in another context's open transaction without owning it (procedure SQL
+	//! joining its caller's transaction). The owner keeps the transaction and must not use it, commit it or roll it
+	//! back until EndBorrowTransaction; this context cannot commit or roll it back.
+	void BorrowTransaction(MetaTransaction &transaction);
+	void EndBorrowTransaction();
+	bool IsBorrowedTransaction() const {
+		return borrowed_transaction != nullptr;
+	}
 	void Commit();
 	void Rollback(optional_ptr<ErrorData>);
 	void ClearTransaction();
@@ -69,12 +78,21 @@ public:
 	};
 
 private:
+	optional_ptr<MetaTransaction> CurrentTransaction() const {
+		if (borrowed_transaction) {
+			return borrowed_transaction;
+		}
+		return current_transaction.get();
+	}
+
 	ClientContext &context;
 	bool auto_commit;
 	TransactionInvalidationPolicy invalidation_policy = TransactionInvalidationPolicy::STANDARD_POLICY;
 	bool auto_rollback = false;
 
 	unique_ptr<MetaTransaction> current_transaction;
+	//! A transaction owned by another context, see BorrowTransaction
+	optional_ptr<MetaTransaction> borrowed_transaction;
 	ErrorData autocheckpoint_error;
 
 	TransactionContext(const TransactionContext &) = delete;

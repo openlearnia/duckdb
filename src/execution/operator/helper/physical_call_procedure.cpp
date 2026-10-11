@@ -14,18 +14,19 @@
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/main/attached_database.hpp"
+#include "duckdb/transaction/transaction_context.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
 #include "quickjs.h"
 
 #include <condition_variable>
 #include <cmath>
 #include <deque>
+#include <exception>
+#include <functional>
 #include <mutex>
 #include <thread>
-#if defined(_WIN32)
-#include "duckdb/common/windows.hpp"
-#else
 #include <pthread.h>
-#endif
 
 namespace duckdb {
 
@@ -105,6 +106,13 @@ struct ProcedureSqlApi {
 	bool transaction_active = false;
 	//! Declared SECURITY DEFINER: transaction control is refused, as in PostgreSQL.
 	bool security_definer = false;
+	//! CALL ran inside the caller's transaction block: the private connection runs in that transaction (borrowed
+	//! for the duration of the call), so its reads see the caller's uncommitted changes and its writes commit or roll
+	//! back with the caller. The procedure does not own that transaction and may not end it.
+	bool joined_caller_transaction = false;
+	transaction_t caller_active_query = MAXIMUM_QUERY_ID;
+	//! The private connection's own temp catalog, set aside while it shares the caller's
+	shared_ptr<AttachedDatabase> procedure_temporary_objects;
 	//! SQL execution errors invalidate the DuckDB transaction even if JavaScript catches them.
 	bool transaction_rollback_only = false;
 	string transaction_error;
@@ -156,6 +164,16 @@ struct ProcedureSqlApi {
 			ClientData::Get(*connection.context)
 			    .catalog_search_path->Set(caller_paths, CatalogSetPathType::SET_DIRECTLY);
 		}
+		if (!client_p.transaction.IsAutoCommit() && client_p.transaction.HasActiveTransaction()) {
+			caller_active_query = client_p.transaction.GetActiveQuery();
+			// one transaction means one temp catalog: the caller's, like a PostgreSQL procedure sees the session's
+			// temporary tables
+			auto &procedure_data = ClientData::Get(*connection.context);
+			procedure_temporary_objects = procedure_data.temporary_objects;
+			procedure_data.temporary_objects = ClientData::Get(client_p).temporary_objects;
+			connection.context->transaction.BorrowTransaction(client_p.transaction.ActiveTransaction());
+			joined_caller_transaction = true;
+		}
 		worker = std::thread(&ProcedureSqlApi::WorkerLoop, this);
 	}
 
@@ -164,6 +182,21 @@ struct ProcedureSqlApi {
 		if (worker.joinable()) {
 			worker.join();
 		}
+		try {
+			ReturnCallerTransaction();
+		} catch (...) { // NOLINT
+		}
+	}
+
+	//! Hand a borrowed transaction back to the caller once no more SQL runs on the private connection
+	void ReturnCallerTransaction() {
+		if (!joined_caller_transaction) {
+			return;
+		}
+		joined_caller_transaction = false;
+		connection.context->transaction.EndBorrowTransaction();
+		ClientData::Get(*connection.context).temporary_objects = std::move(procedure_temporary_objects);
+		client.transaction.SetActiveQuery(caller_active_query);
 	}
 
 	void WorkerLoop();
@@ -871,6 +904,12 @@ static JSValue JsCallTransaction(JSContext *js_context, JSValueConst this_val, i
 	    api->transaction_phase == ProcedureTransactionPhase::DRAINING) {
 		return JS_ThrowInternalError(js_context, "duckdb.transaction cannot be nested");
 	}
+	// PostgreSQL forbids transaction control in a procedure called inside a transaction block
+	if (api->joined_caller_transaction) {
+		return JS_ThrowInternalError(js_context, "duckdb.transaction cannot be used when the procedure is called "
+		                                         "inside a transaction block: its SQL runs in the caller's "
+		                                         "transaction");
+	}
 	// PostgreSQL forbids transaction control inside a SECURITY DEFINER routine, because the
 	// body runs with the creator's privileges and could commit work the caller never saw.
 	if (api->security_definer) {
@@ -1121,6 +1160,7 @@ static void CloseProcedureSqlApi(JSContext *js_context, ProcedureSqlApi &api) {
 	if (api.worker.joinable()) {
 		api.worker.join();
 	}
+	api.ReturnCallerTransaction();
 	for (auto &completion : api.DrainCompletions()) {
 		if (completion.operation) {
 			ReleaseOperationResolvers(js_context, *completion.operation);
@@ -1252,20 +1292,16 @@ static void RegisterSqlApi(JSContext *js_context) {
 	JS_FreeValue(js_context, global_object);
 }
 
-//! Stack QuickJS may use on the calling thread: what remains below this frame, minus headroom for native
-//! frames that run below JavaScript, capped at 8 MiB. A fixed limit overflows the OS stack first on
-//! threads with less stack left, which crashes the process instead of raising a JavaScript error.
+//! Stack QuickJS may use on the calling thread when no procedure thread can be started (Linux and macOS; builds
+//! without threads): what remains below this frame, minus headroom for native frames that run below JavaScript,
+//! capped at 8 MiB. A fixed limit overflows the OS
+//! stack first on threads with less stack left, which crashes the process instead of raising a JavaScript error.
 static size_t ProcedureStackBudget() {
 	constexpr uintptr_t kMaxBudget = 8ULL * 1024 * 1024;
 	constexpr uintptr_t kMinBudget = 64ULL * 1024;
 	constexpr uintptr_t kMinHeadroom = 256ULL * 1024;
 	uintptr_t stack_low = 0;
-#if defined(_WIN32)
-	ULONG_PTR low_limit = 0;
-	ULONG_PTR high_limit = 0;
-	GetCurrentThreadStackLimits(&low_limit, &high_limit);
-	stack_low = static_cast<uintptr_t>(low_limit);
-#elif defined(__APPLE__)
+#if defined(__APPLE__)
 	auto thread = pthread_self();
 	stack_low = reinterpret_cast<uintptr_t>(pthread_get_stackaddr_np(thread)) - pthread_get_stacksize_np(thread);
 #elif defined(__linux__)
@@ -1295,19 +1331,85 @@ static size_t ProcedureStackBudget() {
 	return MinValue<uintptr_t>(remaining - headroom, kMaxBudget);
 }
 
+//! QuickJS runs on a thread of its own with a fixed native stack, so how deep a procedure may recurse does not depend
+//! on the thread that executes the CALL (the main thread, a scheduler thread or the nested-SQL helper thread all have
+//! different stacks). The JavaScript limit leaves the rest of the stack for the native frames below and around it.
+static constexpr size_t kProcedureThreadStackSize = 16ULL * 1024 * 1024;
+static constexpr size_t kProcedureJSStackLimit = 8ULL * 1024 * 1024;
+
+namespace {
+
+struct ProcedureThreadTask {
+	const std::function<void(size_t)> *body;
+	int nesting_depth;
+	std::exception_ptr error;
+};
+
+void RunProcedureThreadTask(ProcedureThreadTask &task) {
+	// the nesting guard is thread-local: continue counting from the calling thread
+	javascript_procedure_depth = task.nesting_depth;
+	try {
+		(*task.body)(kProcedureJSStackLimit);
+	} catch (...) {
+		task.error = std::current_exception();
+	}
+}
+
+#ifndef DUCKDB_NO_THREADS
+void *ProcedureThreadMain(void *argument) {
+	RunProcedureThreadTask(*static_cast<ProcedureThreadTask *>(argument));
+	return nullptr;
+}
+#endif
+
+//! Start the procedure thread; false when the platform cannot create one
+bool TryRunOnProcedureThread(ProcedureThreadTask &task) {
+#ifndef DUCKDB_NO_THREADS
+	pthread_attr_t attributes;
+	if (pthread_attr_init(&attributes) != 0) {
+		return false;
+	}
+	pthread_t thread;
+	bool started = pthread_attr_setstacksize(&attributes, kProcedureThreadStackSize) == 0 &&
+	               pthread_create(&thread, &attributes, ProcedureThreadMain, &task) == 0;
+	pthread_attr_destroy(&attributes);
+	if (!started) {
+		return false;
+	}
+	pthread_join(thread, nullptr);
+	return true;
+#else
+	return false;
+#endif
+}
+
+} // namespace
+
+static void RunOnProcedureThread(const std::function<void(size_t)> &body) {
+	ProcedureThreadTask task {&body, javascript_procedure_depth, nullptr};
+	if (!TryRunOnProcedureThread(task)) {
+		// no thread available: run here, limited by the stack this thread has left
+		body(ProcedureStackBudget());
+		return;
+	}
+	if (task.error) {
+		std::rethrow_exception(task.error);
+	}
+}
+
 PhysicalCallProcedure::PhysicalCallProcedure(PhysicalPlan &physical_plan, ProcedureCatalogEntry &procedure,
                                              vector<unique_ptr<Expression>> arguments, idx_t estimated_cardinality)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::EXTENSION, {procedure.return_type}, estimated_cardinality),
       procedure(procedure), arguments(std::move(arguments)) {
 }
 
+static Value RunJavaScriptProcedure(ClientContext &client, ProcedureCatalogEntry &procedure,
+                                    const vector<Value> &values, size_t stack_limit);
+
 SourceResultType PhysicalCallProcedure::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
                                                         OperatorSourceInput &) const {
 	if (chunk.size() != 0) {
 		return SourceResultType::FINISHED;
-	}
-	if (!context.client.transaction.IsAutoCommit()) {
-		throw InvalidInputException("JavaScript procedures cannot run inside an explicit transaction");
 	}
 	if (javascript_procedure_depth >= kMaxProcedureNesting) {
 		throw InvalidInputException("JavaScript procedure %s (%d): procedures calling procedures "
@@ -1316,16 +1418,28 @@ SourceResultType PhysicalCallProcedure::GetDataInternal(ExecutionContext &contex
 	}
 	ProcedureNestingGuard nesting_guard;
 
-	vector<JSValue> js_arguments;
 	vector<Value> values;
 	values.reserve(arguments.size());
 	for (auto &argument : arguments) {
 		values.push_back(ExpressionExecutor::EvaluateScalar(context.client, *argument));
 	}
 
+	Value duckdb_result;
+	RunOnProcedureThread([&](size_t stack_limit) {
+		duckdb_result = RunJavaScriptProcedure(context.client, procedure, values, stack_limit);
+	});
+	chunk.SetValue(0, 0, duckdb_result);
+	chunk.SetCardinality(1);
+	return SourceResultType::FINISHED;
+}
+
+static Value RunJavaScriptProcedure(ClientContext &client, ProcedureCatalogEntry &procedure,
+                                    const vector<Value> &values, size_t stack_limit) {
+	vector<JSValue> js_arguments;
+
 	// Owns the nested SQL connection for the duration of this invocation; the QuickJS
 	// runtime points at it through its opaque handle so every `duckdb.*` call reaches it.
-	ProcedureSqlApi sql_api(context.client);
+	ProcedureSqlApi sql_api(client);
 	sql_api.security_definer = procedure.security_definer;
 
 	auto runtime = JS_NewRuntime();
@@ -1334,8 +1448,8 @@ SourceResultType PhysicalCallProcedure::GetDataInternal(ExecutionContext &contex
 	}
 	JS_SetMemoryLimit(runtime, 64ULL * 1024 * 1024);
 	JS_UpdateStackTop(runtime);
-	JS_SetMaxStackSize(runtime, ProcedureStackBudget());
-	JS_SetInterruptHandler(runtime, ProcedureInterruptHandler, &context.client);
+	JS_SetMaxStackSize(runtime, stack_limit);
+	JS_SetInterruptHandler(runtime, ProcedureInterruptHandler, &client);
 	JS_SetRuntimeOpaque(runtime, &sql_api);
 	auto js_context = JS_NewContext(runtime);
 	if (!js_context) {
@@ -1391,16 +1505,13 @@ SourceResultType PhysicalCallProcedure::GetDataInternal(ExecutionContext &contex
 			throw InvalidInputException("JavaScript procedure '%s' failed: %s", procedure.name.GetIdentifierName(),
 			                            error);
 		}
-		auto duckdb_result = FromJSValue(js_context, settled_value, context.client, procedure.return_type);
+		auto duckdb_result = FromJSValue(js_context, settled_value, client, procedure.return_type);
 		JS_FreeValue(js_context, settled_value);
 		settled_value = JS_UNDEFINED;
 		CloseProcedureSqlApi(js_context, sql_api);
 		JS_FreeContext(js_context);
 		JS_FreeRuntime(runtime);
-
-		chunk.SetValue(0, 0, duckdb_result);
-		chunk.SetCardinality(1);
-		return SourceResultType::FINISHED;
+		return duckdb_result;
 	} catch (...) {
 		for (auto &argument : js_arguments) {
 			JS_FreeValue(js_context, argument);

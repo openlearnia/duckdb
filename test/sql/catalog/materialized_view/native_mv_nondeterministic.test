@@ -1,0 +1,62 @@
+# name: test/sql/catalog/materialized_view/native_mv_nondeterministic.test
+# description: a native materialized view is a snapshot of its base tables, so time, random and session-dependent functions are rejected
+# group: [materialized_view]
+
+statement ok
+CREATE TABLE src(k INTEGER, ts TIMESTAMP)
+
+statement ok
+INSERT INTO src VALUES (1, now()::TIMESTAMP), (2, now()::TIMESTAMP - INTERVAL '1 day')
+
+statement error
+CREATE MATERIALIZED VIEW mv AS SELECT k, ts FROM src WHERE ts > now()::TIMESTAMP - INTERVAL '2 seconds'
+----
+Materialized view definitions cannot use "now"
+
+statement error
+CREATE MATERIALIZED VIEW mv AS SELECT k, uuid() AS id FROM src
+----
+Materialized view definitions cannot use "uuid"
+
+statement error
+CREATE MATERIALIZED VIEW mv AS SELECT k FROM src WHERE random() < 0.5
+----
+Materialized view definitions cannot use "random"
+
+statement error
+CREATE MATERIALIZED VIEW mv AS SELECT k FROM (SELECT k, ts FROM src) s WHERE ts > now()::TIMESTAMP
+----
+Materialized view definitions cannot use "now"
+
+statement ok
+SET VARIABLE min_k = 1
+
+statement error
+CREATE MATERIALIZED VIEW mv AS SELECT k FROM src WHERE k >= getvariable('min_k')
+----
+Materialized view definitions cannot use "getvariable"
+
+statement error
+CREATE MATERIALIZED VIEW mv AS SELECT k, current_setting('threads') AS t FROM src
+----
+Materialized view definitions cannot use "current_setting"
+
+statement error
+SELECT * FROM mv
+----
+does not exist
+
+statement ok
+CREATE MATERIALIZED VIEW mv AS SELECT k, ts + INTERVAL '1 day' AS t FROM src WHERE ts > TIMESTAMP '2000-01-01'
+
+query I
+SELECT count(*) FROM mv
+----
+2
+
+# plain tables and views may still use them
+statement ok
+CREATE TABLE snap AS SELECT k FROM src WHERE ts > now()::TIMESTAMP - INTERVAL '2 days'
+
+statement ok
+CREATE VIEW v AS SELECT k FROM src WHERE ts > now()::TIMESTAMP - INTERVAL '2 days'
