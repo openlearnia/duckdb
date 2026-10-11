@@ -7,6 +7,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/main/authorization_provider.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/common/multi_file/multi_file_column_mapper.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
@@ -159,6 +160,7 @@ vector<OpenFileInfo> MultiFileReader::ParseFileList(const Value &input) {
 
 shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, const vector<string> &paths,
                                                           const FileGlobInput &glob_input) {
+	DBConfig::GetConfig(context).GetAuthorizationProvider().CheckReadFile(context, function_name.GetIdentifierName());
 	auto res = make_uniq<GlobMultiFileList>(context, paths, glob_input);
 	if (res->GetExpandResult() == FileExpandResult::NO_FILES && !glob_input.AllowsEmpty()) {
 		throw IOException("%s needs at least one file to read", function_name);
@@ -184,6 +186,7 @@ shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context
 		}
 		return CreateFileList(context, paths, glob_input);
 	}
+	DBConfig::GetConfig(context).GetAuthorizationProvider().CheckReadFile(context, function_name.GetIdentifierName());
 	auto res = make_uniq<GlobMultiFileList>(context, std::move(files), glob_input);
 	if (res->GetExpandResult() == FileExpandResult::NO_FILES && !glob_input.AllowsEmpty()) {
 		throw IOException("%s needs at least one file to read", function_name);

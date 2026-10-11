@@ -110,6 +110,13 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 		}
 		if (stmt.info->type == CatalogType::TABLE_ENTRY) {
 			auto &table = entry->Cast<TableCatalogEntry>();
+			if (stmt.info->materialized_view) {
+				auto rewrite = table.ParentCatalog().RewriteMaterializedViewStatement(
+				    context, MaterializedViewStatementType::DROP, table.ParentSchema(), table.name, nullptr);
+				if (rewrite) {
+					return Bind(*rewrite);
+				}
+			}
 			if (stmt.info->materialized_view && !table.IsMaterializedView()) {
 				throw CatalogException("Table \"%s\" is not a materialized view", table.name);
 			}

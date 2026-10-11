@@ -12,6 +12,8 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/catalog/catalog_search_path.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "quickjs.h"
 
 #include <condition_variable>
@@ -19,6 +21,11 @@
 #include <deque>
 #include <mutex>
 #include <thread>
+#if defined(_WIN32)
+#include "duckdb/common/windows.hpp"
+#else
+#include <pthread.h>
+#endif
 
 namespace duckdb {
 
@@ -129,15 +136,25 @@ struct ProcedureSqlApi {
 	explicit ProcedureSqlApi(ClientContext &client_p)
 	    : client(client_p), nesting_depth(javascript_procedure_depth), transaction_active(false),
 	      transaction_rollback_only(false), connection(*client_p.db) {
-		// SQL issued by a procedure uses a private connection. Preserve DuckLake's
-		// per-session role so nested SQL authorization runs as the invoking session.
-		optional_ptr<const ConfigurationOption> role_option;
-		auto role_setting = DBConfig::GetConfig(client_p).TryGetSettingIndex(Identifier("ducklake_role"), role_option);
-		if (role_setting.IsValid()) {
-			Value role_value;
-			if (client_p.TryGetCurrentUserSetting(role_setting.GetIndex(), role_value)) {
-				connection.context->config.user_settings.SetUserSetting(role_setting.GetIndex(), std::move(role_value));
+		// SQL issued by a procedure uses a private connection that runs as the invoking session: it
+		// inherits the session's extension settings (such as DuckLake's role and stale-read policy)
+		// and its search path, so unqualified names resolve as they would for the caller
+		for (auto &entry : DBConfig::GetConfig(client_p).GetExtensionSettings()) {
+			auto &option = entry.second;
+			if (!option.setting_index.IsValid() ||
+			    !client_p.config.user_settings.IsSet(option.setting_index.GetIndex())) {
+				continue;
 			}
+			Value setting_value;
+			if (client_p.TryGetCurrentUserSetting(option.setting_index.GetIndex(), setting_value)) {
+				connection.context->config.user_settings.SetUserSetting(option.setting_index.GetIndex(),
+				                                                        std::move(setting_value));
+			}
+		}
+		auto &caller_paths = ClientData::Get(client_p).catalog_search_path->GetSetPaths();
+		if (!caller_paths.empty()) {
+			ClientData::Get(*connection.context)
+			    .catalog_search_path->Set(caller_paths, CatalogSetPathType::SET_DIRECTLY);
 		}
 		worker = std::thread(&ProcedureSqlApi::WorkerLoop, this);
 	}
@@ -158,6 +175,45 @@ struct ProcedureSqlApi {
 	void WaitForActivity();
 };
 
+//! Largest integer a JavaScript number represents exactly (Number.MAX_SAFE_INTEGER)
+static constexpr int64_t kMaxSafeJSInteger = (int64_t(1) << 53) - 1;
+
+//! Integers become numbers while exact, and BigInt beyond Number.MAX_SAFE_INTEGER
+static JSValue JSIntegerFromSigned(JSContext *js_context, int64_t value) {
+	if (value >= -kMaxSafeJSInteger && value <= kMaxSafeJSInteger) {
+		return JS_NewInt64(js_context, value);
+	}
+	return JS_NewBigInt64(js_context, value);
+}
+
+static JSValue JSIntegerFromUnsigned(JSContext *js_context, uint64_t value) {
+	if (value <= static_cast<uint64_t>(kMaxSafeJSInteger)) {
+		return JS_NewInt64(js_context, static_cast<int64_t>(value));
+	}
+	return JS_NewBigUint64(js_context, value);
+}
+
+//! 128-bit integers outside the 64-bit range go through BigInt(<decimal string>)
+static JSValue JSIntegerFromWide(JSContext *js_context, const Value &value) {
+	auto as_signed = value.DefaultTryCastAs(LogicalType::BIGINT);
+	if (as_signed) {
+		return JSIntegerFromSigned(js_context, as_signed->GetValue<int64_t>());
+	}
+	auto as_unsigned = value.DefaultTryCastAs(LogicalType::UBIGINT);
+	if (as_unsigned) {
+		return JSIntegerFromUnsigned(js_context, as_unsigned->GetValue<uint64_t>());
+	}
+	auto text = value.ToString();
+	auto global = JS_GetGlobalObject(js_context);
+	auto bigint_constructor = JS_GetPropertyStr(js_context, global, "BigInt");
+	auto argument = JS_NewStringLen(js_context, text.c_str(), text.size());
+	auto result = JS_Call(js_context, bigint_constructor, JS_UNDEFINED, 1, &argument);
+	JS_FreeValue(js_context, argument);
+	JS_FreeValue(js_context, bigint_constructor);
+	JS_FreeValue(js_context, global);
+	return result;
+}
+
 static JSValue ToJSValue(JSContext *js_context, const Value &value) {
 	if (value.IsNull()) {
 		return JS_NULL;
@@ -173,12 +229,15 @@ static JSValue ToJSValue(JSContext *js_context, const Value &value) {
 	case LogicalTypeId::SMALLINT:
 	case LogicalTypeId::INTEGER:
 	case LogicalTypeId::BIGINT:
-		return JS_NewInt64(js_context, value.GetValue<int64_t>());
+		return JSIntegerFromSigned(js_context, value.GetValue<int64_t>());
 	case LogicalTypeId::UTINYINT:
 	case LogicalTypeId::USMALLINT:
 	case LogicalTypeId::UINTEGER:
 	case LogicalTypeId::UBIGINT:
-		return JS_NewInt64(js_context, NumericCast<int64_t>(value.GetValue<uint64_t>()));
+		return JSIntegerFromUnsigned(js_context, value.GetValue<uint64_t>());
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UHUGEINT:
+		return JSIntegerFromWide(js_context, value);
 	default: {
 		auto string_value = value.ToString();
 		return JS_NewStringLen(js_context, string_value.c_str(), string_value.size());
@@ -307,10 +366,9 @@ static bool JsToBindValue(JSContext *js_context, JSValueConst js_value, Value &r
 			error = GetJSError(js_context);
 			return false;
 		}
-		int64_t integer_result;
-		if (double_result >= static_cast<double>(NumericLimits<int64_t>::Minimum()) &&
-		    double_result <= static_cast<double>(NumericLimits<int64_t>::Maximum()) &&
-		    double_result == std::floor(double_result)) {
+		// 2^63 itself is a double above INT64_MAX: the upper bound must be exclusive
+		constexpr double kTwoPow63 = 9223372036854775808.0;
+		if (double_result >= -kTwoPow63 && double_result < kTwoPow63 && double_result == std::floor(double_result)) {
 			result = Value::BIGINT(static_cast<int64_t>(double_result));
 		} else {
 			result = Value::DOUBLE(double_result);
@@ -343,7 +401,16 @@ static bool JsToBindValue(JSContext *js_context, JSValueConst js_value, Value &r
 			result = Value::UBIGINT(unsigned_value);
 			return true;
 		}
-		error = "bigint parameter " + text + " does not fit in BIGINT or UBIGINT";
+		Value text_value(text);
+		auto wide = text_value.DefaultTryCastAs(LogicalType::HUGEINT);
+		if (!wide) {
+			wide = text_value.DefaultTryCastAs(LogicalType::UHUGEINT);
+		}
+		if (wide) {
+			result = std::move(*wide);
+			return true;
+		}
+		error = "bigint parameter " + text + " does not fit in HUGEINT or UHUGEINT";
 		return false;
 	}
 	if (JS_IsString(js_value)) {
@@ -365,8 +432,8 @@ static bool JsToBindValue(JSContext *js_context, JSValueConst js_value, Value &r
 	return false;
 }
 
-//! Result-row values are exposed losslessly where practical: integral families become
-//! numbers, wide numerics (DECIMAL/HUGEINT/UBIGINT) become doubles, temporal/complex
+//! Result-row values are exposed losslessly where practical: integers become numbers while
+//! exact and BigInt beyond Number.MAX_SAFE_INTEGER, DECIMAL becomes a double, temporal/complex
 //! types become their string representation.
 static JSValue JsValueFromDuckValue(JSContext *js_context, const Value &value) {
 	if (value.IsNull()) {
@@ -379,18 +446,19 @@ static JSValue JsValueFromDuckValue(JSContext *js_context, const Value &value) {
 	case LogicalTypeId::SMALLINT:
 	case LogicalTypeId::INTEGER:
 	case LogicalTypeId::BIGINT:
-		return JS_NewInt64(js_context, value.GetValue<int64_t>());
+		return JSIntegerFromSigned(js_context, value.GetValue<int64_t>());
 	case LogicalTypeId::UTINYINT:
 	case LogicalTypeId::USMALLINT:
 	case LogicalTypeId::UINTEGER:
-		return JS_NewInt64(js_context, static_cast<int64_t>(value.GetValue<uint32_t>()));
+	case LogicalTypeId::UBIGINT:
+		return JSIntegerFromUnsigned(js_context, value.GetValue<uint64_t>());
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UHUGEINT:
+		return JSIntegerFromWide(js_context, value);
 	case LogicalTypeId::FLOAT:
 		return JS_NewFloat64(js_context, value.GetValue<float>());
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::DECIMAL:
-	case LogicalTypeId::HUGEINT:
-	case LogicalTypeId::UHUGEINT:
-	case LogicalTypeId::UBIGINT:
 		return JS_NewFloat64(js_context, value.GetValue<double>());
 	default: {
 		auto string_value = value.ToString();
@@ -412,7 +480,7 @@ unique_ptr<QueryResult> ProcedureSqlApi::ExecuteOperation(ProcedureSqlOperation 
 		if (prepared->HasError()) {
 			throw InvalidInputException("%s", prepared->GetError());
 		}
-		if (operation.bind_values.size() > prepared->GetExpectedParameterTypes().size()) {
+		if (operation.bind_values.size() > prepared->GetParameterCount()) {
 			throw InvalidInputException("too many bound parameters supplied");
 		}
 		return prepared->Execute(operation.bind_values);
@@ -1184,6 +1252,49 @@ static void RegisterSqlApi(JSContext *js_context) {
 	JS_FreeValue(js_context, global_object);
 }
 
+//! Stack QuickJS may use on the calling thread: what remains below this frame, minus headroom for native
+//! frames that run below JavaScript, capped at 8 MiB. A fixed limit overflows the OS stack first on
+//! threads with less stack left, which crashes the process instead of raising a JavaScript error.
+static size_t ProcedureStackBudget() {
+	constexpr uintptr_t kMaxBudget = 8ULL * 1024 * 1024;
+	constexpr uintptr_t kMinBudget = 64ULL * 1024;
+	constexpr uintptr_t kMinHeadroom = 256ULL * 1024;
+	uintptr_t stack_low = 0;
+#if defined(_WIN32)
+	ULONG_PTR low_limit = 0;
+	ULONG_PTR high_limit = 0;
+	GetCurrentThreadStackLimits(&low_limit, &high_limit);
+	stack_low = static_cast<uintptr_t>(low_limit);
+#elif defined(__APPLE__)
+	auto thread = pthread_self();
+	stack_low = reinterpret_cast<uintptr_t>(pthread_get_stackaddr_np(thread)) - pthread_get_stacksize_np(thread);
+#elif defined(__linux__)
+	pthread_attr_t attributes;
+	if (pthread_getattr_np(pthread_self(), &attributes) == 0) {
+		void *address = nullptr;
+		size_t size = 0;
+		if (pthread_attr_getstack(&attributes, &address, &size) == 0) {
+			stack_low = reinterpret_cast<uintptr_t>(address);
+		}
+		pthread_attr_destroy(&attributes);
+	}
+#endif
+	if (stack_low == 0) {
+		return 1024ULL * 1024;
+	}
+	char marker;
+	auto current = reinterpret_cast<uintptr_t>(&marker);
+	if (current <= stack_low) {
+		return kMinBudget;
+	}
+	auto remaining = current - stack_low;
+	auto headroom = MaxValue<uintptr_t>(kMinHeadroom, remaining / 8);
+	if (remaining <= headroom + kMinBudget) {
+		return kMinBudget;
+	}
+	return MinValue<uintptr_t>(remaining - headroom, kMaxBudget);
+}
+
 PhysicalCallProcedure::PhysicalCallProcedure(PhysicalPlan &physical_plan, ProcedureCatalogEntry &procedure,
                                              vector<unique_ptr<Expression>> arguments, idx_t estimated_cardinality)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::EXTENSION, {procedure.return_type}, estimated_cardinality),
@@ -1222,7 +1333,8 @@ SourceResultType PhysicalCallProcedure::GetDataInternal(ExecutionContext &contex
 		throw OutOfMemoryException("Unable to allocate JavaScript procedure runtime");
 	}
 	JS_SetMemoryLimit(runtime, 64ULL * 1024 * 1024);
-	JS_SetMaxStackSize(runtime, 8ULL * 1024 * 1024);
+	JS_UpdateStackTop(runtime);
+	JS_SetMaxStackSize(runtime, ProcedureStackBudget());
 	JS_SetInterruptHandler(runtime, ProcedureInterruptHandler, &context.client);
 	JS_SetRuntimeOpaque(runtime, &sql_api);
 	auto js_context = JS_NewContext(runtime);

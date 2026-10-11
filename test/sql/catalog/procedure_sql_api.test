@@ -146,13 +146,13 @@ LANGUAGE JAVASCRIPT
 AS $$
   await duckdb.execute("INSERT INTO events VALUES ('2026-01-15', TRUE, 9.5, 18446744073709551615)");
   const rows = await duckdb.query('SELECT d, flag, score, tag FROM events ORDER BY d');
-  return JSON.stringify(rows[0]);
+  return JSON.stringify(rows[0], (key, value) => typeof value === 'bigint' ? value.toString() : value);
 $$;
 
 query T
 CALL first_event();
 ----
-{"d":"2026-01-15","flag":true,"score":9.5,"tag":18446744073709552000}
+{"d":"2026-01-15","flag":true,"score":9.5,"tag":"18446744073709551615"}
 
 # ------------------------------------------------------------- execute(): writes
 

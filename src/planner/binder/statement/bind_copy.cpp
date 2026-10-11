@@ -22,6 +22,8 @@
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/tableref/column_data_ref.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/main/authorization_provider.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/operator/logical_column_data_get.hpp"
 #include "duckdb/planner/operator/logical_copy_to_file.hpp"
@@ -935,6 +937,7 @@ BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
 	if (stmt.info->is_from) {
 		return BindCopyFrom(stmt, function);
 	} else {
+		DBConfig::GetConfig(context).GetAuthorizationProvider().CheckWriteFile(context, stmt.info->file_path);
 		return BindCopyTo(stmt, function, copy_to_type);
 	}
 }

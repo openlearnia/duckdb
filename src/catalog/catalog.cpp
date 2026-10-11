@@ -1498,6 +1498,13 @@ optional_ptr<DependencyManager> Catalog::GetDependencyManager() {
 	return nullptr;
 }
 
+unique_ptr<SQLStatement> Catalog::RewriteMaterializedViewStatement(ClientContext &context,
+                                                                   MaterializedViewStatementType type,
+                                                                   SchemaCatalogEntry &schema, const Identifier &name,
+                                                                   optional_ptr<CreateTableInfo> info) {
+	return nullptr;
+}
+
 ErrorData Catalog::SupportsCreateTable(BoundCreateTableInfo &info) {
 	auto &base = info.Base().Cast<CreateTableInfo>();
 	if (!base.partition_keys.empty()) {

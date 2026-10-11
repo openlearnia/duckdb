@@ -160,6 +160,11 @@ void PhysicalExport::ExtractEntries(ClientContext &context, vector<reference<Sch
 				result.macros.push_back(entry);
 			}
 		});
+		schema.Scan(context, CatalogType::PROCEDURE_ENTRY, [&](CatalogEntry &entry) {
+			if (!entry.internal && entry.type == CatalogType::PROCEDURE_ENTRY) {
+				result.procedures.push_back(entry);
+			}
+		});
 	}
 }
 
@@ -193,6 +198,7 @@ catalog_entry_vector_t PhysicalExport::GetNaiveExportOrder(ClientContext &contex
 	size += entries.views.size();
 	size += entries.indexes.size();
 	size += entries.macros.size();
+	size += entries.procedures.size();
 	catalog_entries.reserve(size);
 	AddEntries(catalog_entries, entries.schemas);
 	AddEntries(catalog_entries, entries.sequences);
@@ -200,6 +206,7 @@ catalog_entry_vector_t PhysicalExport::GetNaiveExportOrder(ClientContext &contex
 	AddEntries(catalog_entries, entries.tables);
 	AddEntries(catalog_entries, entries.macros);
 	AddEntries(catalog_entries, entries.views);
+	AddEntries(catalog_entries, entries.procedures);
 	AddEntries(catalog_entries, entries.indexes);
 	return catalog_entries;
 }

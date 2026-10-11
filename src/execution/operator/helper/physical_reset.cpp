@@ -19,6 +19,7 @@ void PhysicalReset::ResetExtensionVariable(ExecutionContext &context, DBConfig &
 	} else {
 		auto &client_config = ClientConfig::GetConfig(context.client);
 		auto setting_index = extension_option.setting_index.GetIndex();
+		PhysicalSet::ForgetTransactionLocalSetting(context.client, setting_index);
 		client_config.user_settings.SetUserSetting(setting_index, extension_option.default_value);
 	}
 }
@@ -61,6 +62,7 @@ SourceResultType PhysicalReset::GetDataInternal(ExecutionContext &context, DataC
 		auto setting_index = option->setting_idx.GetIndex();
 		if (variable_scope == SetScope::SESSION) {
 			auto &client_config = ClientConfig::GetConfig(context.client);
+			PhysicalSet::ForgetTransactionLocalSetting(context.client, setting_index);
 			client_config.user_settings.ClearSetting(setting_index);
 		} else {
 			config.ResetGenericOption(setting_index);

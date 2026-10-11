@@ -92,9 +92,6 @@ unique_ptr<SetStatement>
 PEGTransformerFactory::TransformStandardAssignment(PEGTransformer &transformer,
                                                    const SettingInfo &set_variable_or_setting,
                                                    vector<unique_ptr<ParsedExpression>> set_assignment) {
-	if (set_variable_or_setting.scope == SetScope::LOCAL) {
-		throw NotImplementedException("SET LOCAL is not implemented.");
-	}
 	if (set_assignment.size() > 1) {
 		throw ParserException("SET can only contain a single value");
 	}

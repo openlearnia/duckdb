@@ -66,7 +66,12 @@ public:
 	virtual bool RequireStatementRebind(ClientContext &context) {
 		return false;
 	}
+	//! Called when a statement reads user-supplied file paths: for the functions named by
+	//! IsFileReadingFunction, and whenever the default MultiFileReader expands a path list.
 	virtual void CheckReadFile(ClientContext &context, const string &function_name) = 0;
+	//! Called when a statement writes to a user-supplied path (COPY ... TO, EXPORT DATABASE).
+	virtual void CheckWriteFile(ClientContext &context, const string &path) {
+	}
 	static bool IsFileReadingFunction(const string &function_name) {
 		return function_name == "read_csv" || function_name == "read_csv_auto" || function_name == "csv_scan" ||
 		       function_name == "read_parquet" || function_name == "parquet_scan" || function_name == "read_json" ||

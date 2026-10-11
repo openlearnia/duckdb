@@ -1,6 +1,8 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/parser/statement/export_statement.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/main/authorization_provider.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/planner/operator/logical_export.hpp"
 #include "duckdb/catalog/catalog_entry/copy_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
@@ -150,6 +152,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	BoundStatement result;
 	result.types = {LogicalType::BOOLEAN};
 	result.names = {"Success"};
+	DBConfig::GetConfig(context).GetAuthorizationProvider().CheckWriteFile(context, stmt.info->file_path);
 
 	// bind copy options
 	BindCopyOptions(*stmt.info);

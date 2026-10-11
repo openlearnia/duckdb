@@ -102,6 +102,9 @@ enum class RemoteCapability : uint8_t {
 	CONNECT,
 };
 
+//! The materialized view statement passed to Catalog::RewriteMaterializedViewStatement
+enum class MaterializedViewStatementType : uint8_t { CREATE, REFRESH, DROP };
+
 //! The Catalog object represents the catalog of the database.
 class Catalog {
 public:
@@ -395,6 +398,14 @@ public:
 		return string();
 	}
 	virtual ErrorData SupportsCreateTable(BoundCreateTableInfo &info);
+	//! Called for CREATE / REFRESH / DROP MATERIALIZED VIEW once the target resolved to this catalog. A catalog that
+	//! maintains materialized views itself returns the statement to bind instead; nullptr uses native materialized
+	//! views. `info` is the CREATE / REFRESH table info, and is absent for DROP.
+	virtual unique_ptr<SQLStatement> RewriteMaterializedViewStatement(ClientContext &context,
+	                                                                  MaterializedViewStatementType type,
+	                                                                  SchemaCatalogEntry &schema,
+	                                                                  const Identifier &name,
+	                                                                  optional_ptr<CreateTableInfo> info);
 
 	virtual bool Supports(RemoteCapability capability) const {
 		return false;

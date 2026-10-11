@@ -51,6 +51,9 @@ SourceResultType PhysicalCopyDatabase::GetDataInternal(ExecutionContext &context
 		case CatalogType::TABLE_MACRO_ENTRY:
 			catalog.CreateFunction(context.client, create_info->Cast<CreateMacroInfo>());
 			break;
+		case CatalogType::PROCEDURE_ENTRY:
+			catalog.CreateFunction(context.client, create_info->Cast<CreateFunctionInfo>());
+			break;
 		case CatalogType::TABLE_ENTRY: {
 			auto binder = Binder::CreateBinder(context.client);
 			auto bound_info = binder->BindCreateTableInfo(std::move(create_info));

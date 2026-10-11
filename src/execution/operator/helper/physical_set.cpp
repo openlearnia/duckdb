@@ -5,8 +5,79 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/main/client_context_state.hpp"
+#include "duckdb/transaction/transaction_context.hpp"
 
 namespace duckdb {
+
+namespace {
+
+//! Session settings changed by SET LOCAL, restored when the transaction ends
+class TransactionLocalSettings : public ClientContextState {
+public:
+	static constexpr const char *KEY = "transaction_local_settings";
+
+	void Record(ClientContext &context, idx_t setting_index) {
+		if (previous.find(setting_index) != previous.end()) {
+			return;
+		}
+		auto &user_settings = ClientConfig::GetConfig(context).user_settings;
+		PreviousValue entry;
+		if (user_settings.IsSet(setting_index)) {
+			entry.is_set = true;
+			user_settings.TryGetSetting(DBConfig::GetConfig(context).user_settings, setting_index, entry.value);
+		}
+		previous.emplace(setting_index, std::move(entry));
+	}
+	void Forget(idx_t setting_index) {
+		previous.erase(setting_index);
+	}
+	void TransactionCommit(MetaTransaction &transaction, ClientContext &context) override {
+		Restore(context);
+	}
+	void TransactionRollback(MetaTransaction &transaction, ClientContext &context) override {
+		Restore(context);
+	}
+
+private:
+	struct PreviousValue {
+		bool is_set = false;
+		Value value;
+	};
+
+	void Restore(ClientContext &context) {
+		auto &user_settings = ClientConfig::GetConfig(context).user_settings;
+		for (auto &entry : previous) {
+			if (entry.second.is_set) {
+				user_settings.SetUserSetting(entry.first, entry.second.value);
+			} else {
+				user_settings.ClearSetting(entry.first);
+			}
+		}
+		previous.clear();
+	}
+
+	unordered_map<idx_t, PreviousValue> previous;
+};
+
+} // namespace
+
+void PhysicalSet::ForgetTransactionLocalSetting(ClientContext &context, idx_t setting_index) {
+	auto state = context.registered_state->Get<TransactionLocalSettings>(TransactionLocalSettings::KEY);
+	if (state) {
+		state->Forget(setting_index);
+	}
+}
+
+//! SET LOCAL: a session-scope change that only lasts until the current transaction ends
+static void SetTransactionLocal(ClientContext &context, idx_t setting_index, Value target_value) {
+	if (context.transaction.IsAutoCommit()) {
+		throw InvalidInputException("SET LOCAL can only be used in transaction blocks");
+	}
+	auto state = context.registered_state->GetOrCreate<TransactionLocalSettings>(TransactionLocalSettings::KEY);
+	state->Record(context, setting_index);
+	Settings::Set(context, setting_index, SetScope::SESSION, std::move(target_value));
+}
 
 void PhysicalSet::SetGenericVariable(ClientContext &context, idx_t setting_index, SetScope scope, Value target_value) {
 	Settings::Set(context, setting_index, scope, std::move(target_value));
@@ -16,13 +87,20 @@ void PhysicalSet::SetExtensionVariable(ClientContext &context, ExtensionOption &
                                        const Value &value) {
 	auto &target_type = extension_option.type;
 	Value target_value = value.CastAs(context, target_type);
+	auto setting_index = extension_option.setting_index.GetIndex();
+	if (scope == SetScope::LOCAL) {
+		SetTransactionLocal(context, setting_index, std::move(target_value));
+		return;
+	}
 	if (extension_option.set_function) {
 		extension_option.set_function(context, scope, target_value);
 	}
 	if (scope == SetScope::AUTOMATIC) {
 		scope = extension_option.default_scope;
 	}
-	auto setting_index = extension_option.setting_index.GetIndex();
+	if (scope != SetScope::GLOBAL) {
+		ForgetTransactionLocalSetting(context, setting_index);
+	}
 	SetGenericVariable(context, setting_index, scope, std::move(target_value));
 }
 
@@ -71,7 +149,20 @@ void PhysicalSet::SetVariable(ClientContext &context, const Identifier &name, Se
 				throw InvalidInputException("Extension parameter %s was not found after autoloading", name);
 			}
 		}
+		if (scope == SetScope::LOCAL && extension_option.set_function) {
+			// restoring at transaction end bypasses setting callbacks, so only plain settings qualify
+			throw NotImplementedException("SET LOCAL is not supported for setting \"%s\"", name);
+		}
 		SetExtensionVariable(context, extension_option, scope, value);
+		return;
+	}
+	if (scope == SetScope::LOCAL) {
+		// restoring at transaction end bypasses setting callbacks, so only plain session settings qualify
+		if (!option->default_value || option->set_callback || option->scope == SettingScopeTarget::GLOBAL_ONLY) {
+			throw NotImplementedException("SET LOCAL is not supported for setting \"%s\"", name);
+		}
+		Value input_val = value.CastAs(context, DBConfig::ParseLogicalType(option->parameter_type));
+		SetTransactionLocal(context, option->setting_idx.GetIndex(), std::move(input_val));
 		return;
 	}
 	SetScope variable_scope = GetSettingScope(*option, scope);
@@ -83,6 +174,9 @@ void PhysicalSet::SetVariable(ClientContext &context, const Identifier &name, Se
 			option->set_callback(info, input_val);
 		}
 		auto setting_index = option->setting_idx.GetIndex();
+		if (variable_scope == SetScope::SESSION) {
+			ForgetTransactionLocalSetting(context, setting_index);
+		}
 		SetGenericVariable(context, setting_index, variable_scope, std::move(input_val));
 		return;
 	}

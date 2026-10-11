@@ -978,12 +978,18 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	}
 	case CatalogType::TABLE_ENTRY: {
 		auto &create_info = stmt.info->Cast<CreateTableInfo>();
+		bool create_materialized_view = create_info.materialized_view && !create_info.materialized_view_refresh;
 		if (create_info.materialized_view_refresh) {
 			auto &qualified_name = create_info.GetQualifiedName();
 			EntryLookupInfo lookup(CatalogType::TABLE_ENTRY, qualified_name.Name());
 			auto entry = Catalog::GetEntry(context, qualified_name.Catalog(), qualified_name.Schema(), lookup,
 			                               OnEntryNotFound::THROW_EXCEPTION);
 			auto &table = entry->Cast<TableCatalogEntry>();
+			auto rewrite = table.ParentCatalog().RewriteMaterializedViewStatement(
+			    context, MaterializedViewStatementType::REFRESH, table.ParentSchema(), table.name, create_info);
+			if (rewrite) {
+				return Bind(*rewrite);
+			}
 			if (!table.IsMaterializedView()) {
 				throw CatalogException("Table \"%s\" is not a materialized view", table.name);
 			}
@@ -1034,6 +1040,15 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 				result.plan = std::move(query_obj.plan);
 			}
 			break;
+		}
+		if (create_materialized_view) {
+			auto &schema = BindSchema(create_info);
+			auto rewrite = schema.ParentCatalog().RewriteMaterializedViewStatement(
+			    context, MaterializedViewStatementType::CREATE, schema, create_info.GetQualifiedName().Name(),
+			    create_info);
+			if (rewrite) {
+				return Bind(*rewrite);
+			}
 		}
 		auto bound_info = BindCreateTableInfo(std::move(stmt.info));
 		auto root = std::move(bound_info->query);

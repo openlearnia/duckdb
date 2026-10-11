@@ -1,0 +1,131 @@
+# name: test/sql/settings/set_local.test
+# description: SET LOCAL changes a session setting until the end of the current transaction
+# group: [settings]
+
+statement error
+SET LOCAL catalog_error_max_schemas = 7
+----
+SET LOCAL can only be used in transaction blocks
+
+statement ok
+BEGIN
+
+statement ok
+SET LOCAL catalog_error_max_schemas = 7
+
+query I
+SELECT current_setting('catalog_error_max_schemas')
+----
+7
+
+statement ok
+COMMIT
+
+query I
+SELECT current_setting('catalog_error_max_schemas')
+----
+100
+
+# Rollback restores an earlier session value
+statement ok
+SET catalog_error_max_schemas = 50
+
+statement ok
+BEGIN
+
+statement ok
+SET LOCAL catalog_error_max_schemas = 7
+
+statement ok
+SET LOCAL catalog_error_max_schemas = 8
+
+query I
+SELECT current_setting('catalog_error_max_schemas')
+----
+8
+
+statement ok
+ROLLBACK
+
+query I
+SELECT current_setting('catalog_error_max_schemas')
+----
+50
+
+# A session SET or RESET inside the transaction is kept
+statement ok
+BEGIN
+
+statement ok
+SET LOCAL catalog_error_max_schemas = 7
+
+statement ok
+SET catalog_error_max_schemas = 9
+
+statement ok
+COMMIT
+
+query I
+SELECT current_setting('catalog_error_max_schemas')
+----
+9
+
+statement ok
+BEGIN
+
+statement ok
+SET LOCAL catalog_error_max_schemas = 7
+
+statement ok
+RESET catalog_error_max_schemas
+
+statement ok
+COMMIT
+
+query I
+SELECT current_setting('catalog_error_max_schemas')
+----
+100
+
+# The value is visible only to the connection that set it
+statement ok con1
+BEGIN
+
+statement ok con1
+SET LOCAL catalog_error_max_schemas = 3
+
+query I con2
+SELECT current_setting('catalog_error_max_schemas')
+----
+100
+
+statement ok con1
+COMMIT
+
+# Settings that are global or apply side effects when set are refused
+statement ok
+BEGIN
+
+statement error
+SET LOCAL threads = 1
+----
+SET LOCAL is not supported for setting
+
+statement ok
+ROLLBACK
+
+statement ok
+BEGIN
+
+statement error
+SET LOCAL search_path = 'main'
+----
+SET LOCAL is not supported for setting
+
+statement ok
+ROLLBACK
+
+statement error
+RESET LOCAL catalog_error_max_schemas
+----
+RESET LOCAL is not implemented

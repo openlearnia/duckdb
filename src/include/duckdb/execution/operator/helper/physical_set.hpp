@@ -47,6 +47,8 @@ public:
 	static void SetVariable(ClientContext &context, const Identifier &name, SetScope scope, const Value &value);
 	static void SetGenericVariable(ClientContext &context, idx_t setting_index, SetScope scope, Value target_value);
 	static SetScope GetSettingScope(const ConfigurationOption &option, SetScope variable_scope);
+	//! A session-scope SET or RESET keeps its value past the end of the transaction
+	static void ForgetTransactionLocalSetting(ClientContext &context, idx_t setting_index);
 
 public:
 	String name;
